@@ -13,21 +13,22 @@ local LocalPlayer = Players.LocalPlayer
 
 local CartoonHubUI = {}
 CartoonHubUI.__index = CartoonHubUI
-CartoonHubUI.Version = "1.1.0"
+CartoonHubUI.Version = "1.2.0"
 
 local DEFAULT_THEME = {
-	Background = Color3.fromRGB(255, 246, 222),
-	Panel = Color3.fromRGB(255, 255, 250),
-	PanelShadow = Color3.fromRGB(83, 58, 68),
-	Primary = Color3.fromRGB(82, 183, 255),
-	PrimaryDark = Color3.fromRGB(38, 118, 205),
-	Accent = Color3.fromRGB(255, 190, 72),
-	AccentDark = Color3.fromRGB(226, 124, 55),
-	Success = Color3.fromRGB(93, 214, 124),
-	Danger = Color3.fromRGB(255, 99, 116),
-	Text = Color3.fromRGB(48, 38, 54),
-	Muted = Color3.fromRGB(124, 100, 116),
-	Stroke = Color3.fromRGB(73, 52, 63),
+	Background = Color3.fromRGB(16, 16, 19),
+	Panel = Color3.fromRGB(25, 25, 29),
+	PanelAlt = Color3.fromRGB(34, 34, 39),
+	PanelShadow = Color3.fromRGB(0, 0, 0),
+	Primary = Color3.fromRGB(246, 47, 169),
+	PrimaryDark = Color3.fromRGB(160, 34, 118),
+	Accent = Color3.fromRGB(246, 47, 169),
+	AccentDark = Color3.fromRGB(255, 90, 194),
+	Success = Color3.fromRGB(75, 217, 154),
+	Danger = Color3.fromRGB(255, 80, 111),
+	Text = Color3.fromRGB(245, 245, 248),
+	Muted = Color3.fromRGB(155, 155, 165),
+	Stroke = Color3.fromRGB(55, 55, 64),
 	White = Color3.fromRGB(255, 255, 255),
 }
 
@@ -65,6 +66,14 @@ local function stroke(color, thickness, transparency)
 		Thickness = thickness or 2,
 		Transparency = transparency or 0,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+	})
+end
+
+local function gradient(colorA, colorB, rotation, transparency)
+	return make("UIGradient", {
+		Color = ColorSequence.new(colorA, colorB),
+		Rotation = rotation or 0,
+		Transparency = transparency or NumberSequence.new(0),
 	})
 end
 
@@ -193,13 +202,13 @@ function CartoonHubUI.new(config)
 		Name = "Shadow",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = self.Theme.PanelShadow,
-		BackgroundTransparency = 0.78,
+		BackgroundTransparency = 0.42,
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(622, 432),
+		Size = UDim2.fromOffset(762, 502),
 		Parent = gui,
 	}, {
-		corner(18),
+		corner(30),
 	})
 
 	local window = make("Frame", {
@@ -209,27 +218,25 @@ function CartoonHubUI.new(config)
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(610, 420),
+		Size = UDim2.fromOffset(740, 480),
 		Parent = gui,
 	}, {
-		corner(18),
-		stroke(self.Theme.Stroke, 3),
+		corner(28),
+		stroke(self.Theme.Stroke, 1, 0.15),
+		gradient(Color3.fromRGB(22, 22, 26), Color3.fromRGB(11, 11, 14), 35),
 	})
 
 	local titleBar = make("Frame", {
 		Name = "TitleBar",
-		BackgroundColor3 = self.Theme.Accent,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 76),
+		Size = UDim2.new(0, 236, 0, 96),
 		Parent = window,
-	}, {
-		corner(18),
-		stroke(self.Theme.Stroke, 2),
 	})
 
 	local titleCover = make("Frame", {
 		Name = "TitleCover",
-		BackgroundColor3 = self.Theme.Accent,
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, 0, 1, -18),
 		Size = UDim2.new(1, 0, 0, 18),
@@ -238,84 +245,154 @@ function CartoonHubUI.new(config)
 
 	local icon = make("TextLabel", {
 		Name = "Icon",
-		BackgroundColor3 = self.Theme.White,
+		BackgroundColor3 = self.Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Font = Enum.Font.FredokaOne,
-		Position = UDim2.fromOffset(18, 14),
-		Size = UDim2.fromOffset(46, 46),
-		Text = "*",
-		TextColor3 = self.Theme.AccentDark,
-		TextSize = 30,
+		Font = Enum.Font.GothamBlack,
+		Position = UDim2.fromOffset(24, 28),
+		Size = UDim2.fromOffset(34, 34),
+		Text = string.sub(self.Title, 1, 1),
+		TextColor3 = self.Theme.Text,
+		TextSize = 18,
 		Parent = titleBar,
 	}, {
-		corner(14),
-		stroke(self.Theme.Stroke, 2),
+		corner(10),
+		stroke(self.Theme.Stroke, 1, 0.25),
 	})
 
 	local title = make("TextLabel", {
 		Name = "Title",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
-		Position = UDim2.fromOffset(76, 12),
-		Size = UDim2.new(1, -150, 0, 30),
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.fromOffset(70, 25),
+		Size = UDim2.new(1, -88, 0, 24),
 		Text = self.Title,
 		TextColor3 = self.Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextSize = 25,
+		TextSize = 20,
 		Parent = titleBar,
 	})
 
 	local subtitle = make("TextLabel", {
 		Name = "Subtitle",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(78, 42),
-		Size = UDim2.new(1, -160, 0, 18),
+		Font = Enum.Font.GothamMedium,
+		Position = UDim2.fromOffset(70, 50),
+		Size = UDim2.new(1, -88, 0, 18),
 		Text = self.Subtitle,
 		TextColor3 = self.Theme.Muted,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextSize = 13,
+		TextSize = 12,
 		Parent = titleBar,
 	})
 
 	local close = make("TextButton", {
 		Name = "Close",
 		AnchorPoint = Vector2.new(1, 0),
-		BackgroundColor3 = self.Theme.Danger,
+		BackgroundColor3 = self.Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Font = Enum.Font.FredokaOne,
-		Position = UDim2.new(1, -18, 0, 17),
-		Size = UDim2.fromOffset(42, 42),
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.new(1, -22, 0, 22),
+		Size = UDim2.fromOffset(34, 34),
 		Text = "X",
-		TextColor3 = self.Theme.White,
-		TextSize = 20,
-		Parent = titleBar,
+		TextColor3 = self.Theme.Muted,
+		TextSize = 14,
+		Parent = window,
 	}, {
-		corner(13),
-		stroke(self.Theme.Stroke, 2),
+		corner(9),
+		stroke(self.Theme.Stroke, 1, 0.25),
 	})
-	addHover(close, self.Theme.Danger, Color3.fromRGB(255, 125, 138))
+	addHover(close, self.Theme.PanelAlt, self.Theme.Danger)
+
+	local profileName = config.ProfileName or "Nimbus"
+
+	local profile = make("Frame", {
+		Name = "Profile",
+		BackgroundColor3 = self.Theme.Panel,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(24, 98),
+		Size = UDim2.fromOffset(190, 56),
+		Parent = window,
+	}, {
+		corner(15),
+		stroke(self.Theme.Stroke, 1, 0.32),
+		gradient(Color3.fromRGB(42, 42, 48), Color3.fromRGB(28, 28, 33), 0),
+	})
+
+	make("TextLabel", {
+		Name = "ProfileIcon",
+		BackgroundColor3 = self.Theme.PanelAlt,
+		BorderSizePixel = 0,
+		Font = Enum.Font.GothamBlack,
+		Position = UDim2.fromOffset(12, 12),
+		Size = UDim2.fromOffset(32, 32),
+		Text = string.sub(profileName, 1, 1),
+		TextColor3 = self.Theme.Text,
+		TextSize = 16,
+		Parent = profile,
+	}, {
+		corner(9),
+	})
+
+	make("TextLabel", {
+		Name = "ProfileName",
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.fromOffset(56, 0),
+		Size = UDim2.new(1, -84, 1, 0),
+		Text = profileName,
+		TextColor3 = self.Theme.Text,
+		TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = profile,
+	})
+
+	make("TextLabel", {
+		Name = "Chevron",
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.new(1, -14, 0.5, 0),
+		Size = UDim2.fromOffset(18, 18),
+		Text = "v",
+		TextColor3 = self.Theme.Muted,
+		TextSize = 18,
+		Parent = profile,
+	})
 
 	local sidebar = make("Frame", {
 		Name = "Sidebar",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(16, 92),
-		Size = UDim2.fromOffset(158, 312),
+		Position = UDim2.fromOffset(24, 176),
+		Size = UDim2.fromOffset(190, 280),
 		Parent = window,
 	}, {
 		make("UIListLayout", {
-			Padding = UDim.new(0, 9),
+			Padding = UDim.new(0, 12),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
 
+	local divider = make("Frame", {
+		Name = "Divider",
+		BackgroundColor3 = self.Theme.Stroke,
+		BackgroundTransparency = 0.5,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(238, 0),
+		Size = UDim2.new(0, 1, 1, 0),
+		Parent = window,
+	})
+
 	local contentClip = make("Frame", {
 		Name = "ContentClip",
-		BackgroundTransparency = 1,
+		BackgroundColor3 = Color3.fromRGB(13, 13, 16),
+		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(190, 92),
-		Size = UDim2.new(1, -206, 1, -108),
+		Position = UDim2.fromOffset(264, 76),
+		Size = UDim2.new(1, -288, 1, -100),
 		Parent = window,
+	}, {
+		corner(26),
+		stroke(self.Theme.Stroke, 1, 0.35),
 	})
 
 	local notificationHolder = make("Frame", {
@@ -363,8 +440,8 @@ end
 
 function Window:SetVisible(visible)
 	self.Visible = visible
-	local targetSize = visible and UDim2.fromOffset(610, 420) or UDim2.fromOffset(610, 0)
-	local shadowSize = visible and UDim2.fromOffset(622, 432) or UDim2.fromOffset(622, 0)
+	local targetSize = visible and UDim2.fromOffset(740, 480) or UDim2.fromOffset(740, 0)
+	local shadowSize = visible and UDim2.fromOffset(762, 502) or UDim2.fromOffset(762, 0)
 	self.Gui.Enabled = true
 	spring(self.Window, { Size = targetSize })
 	spring(self.Shadow, { Size = shadowSize })
@@ -390,14 +467,15 @@ function Window:Notify(options)
 		Parent = self.NotificationHolder,
 	}, {
 		corner(15),
-		stroke(self.Theme.Stroke, 2),
+		stroke(self.Theme.Stroke, 1, 0.25),
+		gradient(Color3.fromRGB(31, 31, 36), Color3.fromRGB(20, 20, 24), 0),
 		padding(14, 14, 10, 10),
 	})
 
 	make("TextLabel", {
 		Name = "Title",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(1, 0, 0, 23),
 		Text = options.Title or "Heads up!",
 		TextColor3 = self.Theme.Text,
@@ -450,38 +528,53 @@ function Window:CreateTab(name, iconText)
 
 	local button = make("TextButton", {
 		Name = name .. "Tab",
-		BackgroundColor3 = self.Theme.Panel,
+		BackgroundColor3 = Color3.fromRGB(18, 18, 22),
+		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Font = Enum.Font.FredokaOne,
-		Size = UDim2.new(1, 0, 0, 48),
+		Font = Enum.Font.GothamBold,
+		Size = UDim2.new(1, 0, 0, 54),
 		Text = "",
 		Parent = self.Sidebar,
 	}, {
-		corner(14),
-		stroke(self.Theme.Stroke, 2),
+		corner(16),
+		stroke(self.Theme.Stroke, 1, 1),
+		gradient(Color3.fromRGB(42, 43, 50), Color3.fromRGB(25, 25, 30), 0),
+	})
+
+	local glow = make("Frame", {
+		Name = "Glow",
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = self.Theme.Primary,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(1, -4, 0.5, 0),
+		Size = UDim2.fromOffset(5, 36),
+		Parent = button,
+	}, {
+		corner(99),
 	})
 
 	make("TextLabel", {
 		Name = "Icon",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
-		Position = UDim2.fromOffset(12, 8),
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.fromOffset(18, 12),
 		Size = UDim2.fromOffset(30, 30),
 		Text = iconText or "#",
-		TextColor3 = self.Theme.AccentDark,
-		TextSize = 20,
+		TextColor3 = self.Theme.Muted,
+		TextSize = 19,
 		Parent = button,
 	})
 
-	make("TextLabel", {
+	local label = make("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
-		Position = UDim2.fromOffset(46, 0),
-		Size = UDim2.new(1, -54, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Position = UDim2.fromOffset(56, 0),
+		Size = UDim2.new(1, -74, 1, 0),
 		Text = name,
-		TextColor3 = self.Theme.Text,
-		TextSize = 16,
+		TextColor3 = self.Theme.Muted,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = button,
 	})
@@ -492,9 +585,10 @@ function Window:CreateTab(name, iconText)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.fromOffset(0, 0),
+		Position = UDim2.fromOffset(20, 20),
 		ScrollBarImageColor3 = self.Theme.AccentDark,
 		ScrollBarThickness = 5,
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, -40, 1, -40),
 		Visible = false,
 		Parent = self.ContentClip,
 	}, {
@@ -506,6 +600,8 @@ function Window:CreateTab(name, iconText)
 	})
 
 	tab.Button = button
+	tab.Glow = glow
+	tab.Label = label
 	tab.Page = page
 	table.insert(self.Tabs, tab)
 
@@ -526,7 +622,13 @@ function Window:SelectTab(selectedTab)
 		tab.Active = isActive
 		tab.Page.Visible = isActive
 		softTween(tab.Button, {
-			BackgroundColor3 = isActive and self.Theme.Primary or self.Theme.Panel,
+			BackgroundTransparency = isActive and 0 or 1,
+		})
+		softTween(tab.Glow, {
+			BackgroundTransparency = isActive and 0 or 1,
+		})
+		softTween(tab.Label, {
+			TextColor3 = isActive and self.Theme.Text or self.Theme.Muted,
 		})
 	end
 end
@@ -541,14 +643,15 @@ function Tab:CreateSection(name)
 	local frame = make("Frame", {
 		Name = name .. "Section",
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = self.Window.Theme.Panel,
+		BackgroundColor3 = Color3.fromRGB(20, 20, 24),
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, -2, 0, 0),
 		Parent = self.Page,
 	}, {
-		corner(16),
-		stroke(self.Window.Theme.Stroke, 2),
-		padding(14, 14, 12, 14),
+		corner(22),
+		stroke(self.Window.Theme.Stroke, 1, 0.35),
+		gradient(Color3.fromRGB(27, 27, 32), Color3.fromRGB(17, 17, 20), 90),
+		padding(16, 16, 14, 16),
 		make("UIListLayout", {
 			Padding = UDim.new(0, 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
@@ -558,11 +661,11 @@ function Tab:CreateSection(name)
 	make("TextLabel", {
 		Name = "Header",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
-		Size = UDim2.new(1, 0, 0, 24),
+		Font = Enum.Font.GothamBold,
+		Size = UDim2.new(1, 0, 0, 28),
 		Text = name,
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 19,
+		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = frame,
 	})
@@ -598,9 +701,9 @@ function Section:AddButton(options)
 
 	local button = make("TextButton", {
 		Name = options.Name or "Button",
-		BackgroundColor3 = options.Color or self.Window.Theme.Primary,
+		BackgroundColor3 = options.Color or self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(1, 0, 0, 44),
 		Text = options.Name or "Button",
 		TextColor3 = self.Window.Theme.White,
@@ -608,11 +711,12 @@ function Section:AddButton(options)
 		Parent = self.Frame,
 	}, {
 		corner(14),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.25),
+		gradient(Color3.fromRGB(48, 48, 56), Color3.fromRGB(28, 28, 34), 0),
 	})
 
 	textSize(button, 13, 17)
-	addHover(button, options.Color or self.Window.Theme.Primary, self.Window.Theme.PrimaryDark)
+	addHover(button, options.Color or self.Window.Theme.PanelAlt, self.Window.Theme.PrimaryDark)
 
 	button.Activated:Connect(function()
 		spring(button, { Size = UDim2.new(1, 0, 0, 40) })
@@ -635,7 +739,7 @@ function Section:AddToggle(options)
 
 	local row = make("TextButton", {
 		Name = options.Name or "Toggle",
-		BackgroundColor3 = Color3.fromRGB(255, 250, 239),
+		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(1, 0, 0, 46),
@@ -643,13 +747,13 @@ function Section:AddToggle(options)
 		Parent = self.Frame,
 	}, {
 		corner(14),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
 	make("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.fromOffset(14, 0),
 		Size = UDim2.new(1, -82, 1, 0),
 		Text = options.Name or "Toggle",
@@ -662,14 +766,14 @@ function Section:AddToggle(options)
 	local track = make("Frame", {
 		Name = "Track",
 		AnchorPoint = Vector2.new(1, 0.5),
-		BackgroundColor3 = value and self.Window.Theme.Success or Color3.fromRGB(218, 206, 199),
+		BackgroundColor3 = value and self.Window.Theme.Primary or Color3.fromRGB(52, 52, 60),
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(54, 28),
 		Parent = row,
 	}, {
 		corner(99),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.2),
 	})
 
 	local knob = make("Frame", {
@@ -686,7 +790,7 @@ function Section:AddToggle(options)
 	local function set(newValue, skipCallback)
 		value = newValue
 		softTween(track, {
-			BackgroundColor3 = value and self.Window.Theme.Success or Color3.fromRGB(218, 206, 199),
+			BackgroundColor3 = value and self.Window.Theme.Primary or Color3.fromRGB(52, 52, 60),
 		})
 		spring(knob, {
 			Position = value and UDim2.fromOffset(28, 4) or UDim2.fromOffset(4, 4),
@@ -718,19 +822,19 @@ function Section:AddSlider(options)
 
 	local row = make("Frame", {
 		Name = options.Name or "Slider",
-		BackgroundColor3 = Color3.fromRGB(255, 250, 239),
+		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 66),
 		Parent = self.Frame,
 	}, {
 		corner(14),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
 	make("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.fromOffset(14, 8),
 		Size = UDim2.new(1, -100, 0, 20),
 		Text = options.Name or "Slider",
@@ -744,11 +848,11 @@ function Section:AddSlider(options)
 		Name = "Value",
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.new(1, -14, 0, 8),
 		Size = UDim2.fromOffset(72, 20),
 		Text = tostring(value),
-		TextColor3 = self.Window.Theme.AccentDark,
+		TextColor3 = self.Window.Theme.Accent,
 		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = row,
@@ -756,7 +860,7 @@ function Section:AddSlider(options)
 
 	local bar = make("TextButton", {
 		Name = "Bar",
-		BackgroundColor3 = Color3.fromRGB(230, 218, 208),
+		BackgroundColor3 = Color3.fromRGB(52, 52, 60),
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(14, 40),
 		Size = UDim2.new(1, -28, 0, 12),
@@ -764,7 +868,7 @@ function Section:AddSlider(options)
 		Parent = row,
 	}, {
 		corner(99),
-		stroke(self.Window.Theme.Stroke, 1),
+		stroke(self.Window.Theme.Stroke, 1, 0.35),
 	})
 
 	local fill = make("Frame", {
@@ -834,13 +938,13 @@ function Section:AddDropdown(options)
 	local holder = make("Frame", {
 		Name = options.Name or "Dropdown",
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Color3.fromRGB(255, 250, 239),
+		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 46),
 		Parent = self.Frame,
 	}, {
 		corner(14),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.28),
 		make("UIListLayout", {
 			Padding = UDim.new(0, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
@@ -850,7 +954,7 @@ function Section:AddDropdown(options)
 	local button = make("TextButton", {
 		Name = "Button",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(1, 0, 0, 46),
 		Text = "",
 		Parent = holder,
@@ -859,7 +963,7 @@ function Section:AddDropdown(options)
 	local label = make("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.fromOffset(14, 0),
 		Size = UDim2.new(0.45, 0, 1, 0),
 		Text = options.Name or "Dropdown",
@@ -877,7 +981,7 @@ function Section:AddDropdown(options)
 		Position = UDim2.new(1, -38, 0, 0),
 		Size = UDim2.new(0.5, 0, 1, 0),
 		Text = tostring(selected),
-		TextColor3 = self.Window.Theme.AccentDark,
+		TextColor3 = self.Window.Theme.Accent,
 		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = button,
@@ -887,7 +991,7 @@ function Section:AddDropdown(options)
 		Name = "Arrow",
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.new(1, -14, 0.5, 0),
 		Size = UDim2.fromOffset(18, 18),
 		Text = "v",
@@ -931,7 +1035,7 @@ function Section:AddDropdown(options)
 		for _, choice in ipairs(choices) do
 			local item = make("TextButton", {
 				Name = tostring(choice),
-				BackgroundColor3 = self.Window.Theme.White,
+				BackgroundColor3 = Color3.fromRGB(36, 36, 42),
 				BorderSizePixel = 0,
 				Font = Enum.Font.GothamBold,
 				Size = UDim2.new(1, 0, 0, 34),
@@ -941,9 +1045,9 @@ function Section:AddDropdown(options)
 				Parent = list,
 			}, {
 				corner(10),
-				stroke(self.Window.Theme.Stroke, 1),
+				stroke(self.Window.Theme.Stroke, 1, 0.35),
 			})
-			addHover(item, self.Window.Theme.White, Color3.fromRGB(245, 239, 230))
+			addHover(item, Color3.fromRGB(36, 36, 42), Color3.fromRGB(48, 48, 56))
 			item.Activated:Connect(function()
 				selectChoice(choice)
 			end)
@@ -976,19 +1080,19 @@ function Section:AddTextbox(options)
 
 	local row = make("Frame", {
 		Name = options.Name or "Textbox",
-		BackgroundColor3 = Color3.fromRGB(255, 250, 239),
+		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 50),
 		Parent = self.Frame,
 	}, {
 		corner(14),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
 	make("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.fromOffset(14, 0),
 		Size = UDim2.new(0.36, 0, 1, 0),
 		Text = options.Name or "Text",
@@ -1001,7 +1105,7 @@ function Section:AddTextbox(options)
 	local box = make("TextBox", {
 		Name = "Box",
 		AnchorPoint = Vector2.new(1, 0.5),
-		BackgroundColor3 = self.Window.Theme.White,
+		BackgroundColor3 = Color3.fromRGB(16, 16, 20),
 		BorderSizePixel = 0,
 		ClearTextOnFocus = false,
 		Font = Enum.Font.GothamBold,
@@ -1010,11 +1114,12 @@ function Section:AddTextbox(options)
 		Size = UDim2.new(0.58, 0, 0, 32),
 		Text = options.Default or "",
 		TextColor3 = self.Window.Theme.Text,
+		PlaceholderColor3 = self.Window.Theme.Muted,
 		TextSize = 13,
 		Parent = row,
 	}, {
 		corner(10),
-		stroke(self.Window.Theme.Stroke, 1),
+		stroke(self.Window.Theme.Stroke, 1, 0.35),
 		padding(10, 10, 0, 0),
 	})
 
@@ -1042,7 +1147,7 @@ function Section:AddKeybind(options)
 
 	local row = make("TextButton", {
 		Name = options.Name or "Keybind",
-		BackgroundColor3 = Color3.fromRGB(255, 250, 239),
+		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(1, 0, 0, 46),
@@ -1050,13 +1155,13 @@ function Section:AddKeybind(options)
 		Parent = self.Frame,
 	}, {
 		corner(14),
-		stroke(self.Window.Theme.Stroke, 2),
+		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
 	make("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.fromOffset(14, 0),
 		Size = UDim2.new(1, -130, 1, 0),
 		Text = options.Name or "Keybind",
@@ -1071,7 +1176,7 @@ function Section:AddKeybind(options)
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundColor3 = self.Window.Theme.Primary,
 		BorderSizePixel = 0,
-		Font = Enum.Font.FredokaOne,
+		Font = Enum.Font.GothamBold,
 		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(92, 30),
 		Text = currentKey.Name,
