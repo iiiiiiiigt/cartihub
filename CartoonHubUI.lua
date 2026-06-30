@@ -13,10 +13,9 @@ local LocalPlayer = Players.LocalPlayer
 
 local CartoonHubUI = {}
 CartoonHubUI.__index = CartoonHubUI
-CartoonHubUI.Version = "1.2.1"
+CartoonHubUI.Version = "1.2.2"
 
 local WINDOW_SIZE = Vector2.new(620, 390)
-local SHADOW_SIZE = Vector2.new(640, 410)
 
 local DEFAULT_THEME = {
 	Background = Color3.fromRGB(16, 16, 19),
@@ -199,19 +198,6 @@ function CartoonHubUI.new(config)
 		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = parent,
-	})
-
-	local shadow = make("Frame", {
-		Name = "Shadow",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = self.Theme.PanelShadow,
-		BackgroundTransparency = 0.42,
-		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(SHADOW_SIZE.X, SHADOW_SIZE.Y),
-		Parent = gui,
-	}, {
-		corner(24),
 	})
 
 	local window = make("Frame", {
@@ -432,7 +418,6 @@ function CartoonHubUI.new(config)
 	})
 
 	self.Gui = gui
-	self.Shadow = shadow
 	self.Window = window
 	self.TitleBar = titleBar
 	self.Sidebar = sidebar
@@ -440,9 +425,7 @@ function CartoonHubUI.new(config)
 	self.NotificationHolder = notificationHolder
 
 	createDragger(titleDrag, window)
-	createDragger(titleDrag, shadow)
 	createDragger(profileDrag, window)
-	createDragger(profileDrag, shadow)
 
 	close.Activated:Connect(function()
 		self:SetVisible(false)
@@ -464,10 +447,8 @@ end
 function Window:SetVisible(visible)
 	self.Visible = visible
 	local targetSize = visible and UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y) or UDim2.fromOffset(WINDOW_SIZE.X, 0)
-	local shadowSize = visible and UDim2.fromOffset(SHADOW_SIZE.X, SHADOW_SIZE.Y) or UDim2.fromOffset(SHADOW_SIZE.X, 0)
 	self.Gui.Enabled = true
 	spring(self.Window, { Size = targetSize })
-	spring(self.Shadow, { Size = shadowSize })
 	task.delay(0.18, function()
 		if not self.Visible then
 			self.Gui.Enabled = false
