@@ -13,7 +13,10 @@ local LocalPlayer = Players.LocalPlayer
 
 local CartoonHubUI = {}
 CartoonHubUI.__index = CartoonHubUI
-CartoonHubUI.Version = "1.2.0"
+CartoonHubUI.Version = "1.2.1"
+
+local WINDOW_SIZE = Vector2.new(620, 390)
+local SHADOW_SIZE = Vector2.new(640, 410)
 
 local DEFAULT_THEME = {
 	Background = Color3.fromRGB(16, 16, 19),
@@ -205,10 +208,10 @@ function CartoonHubUI.new(config)
 		BackgroundTransparency = 0.42,
 		BorderSizePixel = 0,
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(762, 502),
+		Size = UDim2.fromOffset(SHADOW_SIZE.X, SHADOW_SIZE.Y),
 		Parent = gui,
 	}, {
-		corner(30),
+		corner(24),
 	})
 
 	local window = make("Frame", {
@@ -218,10 +221,10 @@ function CartoonHubUI.new(config)
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(740, 480),
+		Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y),
 		Parent = gui,
 	}, {
-		corner(28),
+		corner(22),
 		stroke(self.Theme.Stroke, 1, 0.15),
 		gradient(Color3.fromRGB(22, 22, 26), Color3.fromRGB(11, 11, 14), 35),
 	})
@@ -230,7 +233,7 @@ function CartoonHubUI.new(config)
 		Name = "TitleBar",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Size = UDim2.new(0, 236, 0, 96),
+		Size = UDim2.new(0, 196, 0, 76),
 		Parent = window,
 	})
 
@@ -248,14 +251,14 @@ function CartoonHubUI.new(config)
 		BackgroundColor3 = self.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBlack,
-		Position = UDim2.fromOffset(24, 28),
-		Size = UDim2.fromOffset(34, 34),
+		Position = UDim2.fromOffset(18, 22),
+		Size = UDim2.fromOffset(30, 30),
 		Text = string.sub(self.Title, 1, 1),
 		TextColor3 = self.Theme.Text,
-		TextSize = 18,
+		TextSize = 16,
 		Parent = titleBar,
 	}, {
-		corner(10),
+		corner(8),
 		stroke(self.Theme.Stroke, 1, 0.25),
 	})
 
@@ -263,12 +266,12 @@ function CartoonHubUI.new(config)
 		Name = "Title",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(70, 25),
-		Size = UDim2.new(1, -88, 0, 24),
+		Position = UDim2.fromOffset(60, 18),
+		Size = UDim2.new(1, -72, 0, 22),
 		Text = self.Title,
 		TextColor3 = self.Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextSize = 20,
+		TextSize = 18,
 		Parent = titleBar,
 	})
 
@@ -276,12 +279,21 @@ function CartoonHubUI.new(config)
 		Name = "Subtitle",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamMedium,
-		Position = UDim2.fromOffset(70, 50),
-		Size = UDim2.new(1, -88, 0, 18),
+		Position = UDim2.fromOffset(60, 41),
+		Size = UDim2.new(1, -72, 0, 16),
 		Text = self.Subtitle,
 		TextColor3 = self.Theme.Muted,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		TextSize = 12,
+		TextSize = 11,
+		Parent = titleBar,
+	})
+
+	local titleDrag = make("TextButton", {
+		Name = "DragHandle",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Text = "",
 		Parent = titleBar,
 	})
 
@@ -291,8 +303,8 @@ function CartoonHubUI.new(config)
 		BackgroundColor3 = self.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.new(1, -22, 0, 22),
-		Size = UDim2.fromOffset(34, 34),
+		Position = UDim2.new(1, -18, 0, 18),
+		Size = UDim2.fromOffset(30, 30),
 		Text = "X",
 		TextColor3 = self.Theme.Muted,
 		TextSize = 14,
@@ -309,11 +321,11 @@ function CartoonHubUI.new(config)
 		Name = "Profile",
 		BackgroundColor3 = self.Theme.Panel,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(24, 98),
-		Size = UDim2.fromOffset(190, 56),
+		Position = UDim2.fromOffset(18, 78),
+		Size = UDim2.fromOffset(164, 48),
 		Parent = window,
 	}, {
-		corner(15),
+		corner(13),
 		stroke(self.Theme.Stroke, 1, 0.32),
 		gradient(Color3.fromRGB(42, 42, 48), Color3.fromRGB(28, 28, 33), 0),
 	})
@@ -323,11 +335,11 @@ function CartoonHubUI.new(config)
 		BackgroundColor3 = self.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBlack,
-		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(32, 32),
+		Position = UDim2.fromOffset(10, 10),
+		Size = UDim2.fromOffset(28, 28),
 		Text = string.sub(profileName, 1, 1),
 		TextColor3 = self.Theme.Text,
-		TextSize = 16,
+		TextSize = 14,
 		Parent = profile,
 	}, {
 		corner(9),
@@ -337,11 +349,11 @@ function CartoonHubUI.new(config)
 		Name = "ProfileName",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(56, 0),
-		Size = UDim2.new(1, -84, 1, 0),
+		Position = UDim2.fromOffset(48, 0),
+		Size = UDim2.new(1, -74, 1, 0),
 		Text = profileName,
 		TextColor3 = self.Theme.Text,
-		TextSize = 18,
+		TextSize = 16,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = profile,
 	})
@@ -351,23 +363,32 @@ function CartoonHubUI.new(config)
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.new(1, -14, 0.5, 0),
+		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(18, 18),
 		Text = "v",
 		TextColor3 = self.Theme.Muted,
-		TextSize = 18,
+		TextSize = 16,
+		Parent = profile,
+	})
+
+	local profileDrag = make("TextButton", {
+		Name = "DragHandle",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Text = "",
 		Parent = profile,
 	})
 
 	local sidebar = make("Frame", {
 		Name = "Sidebar",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(24, 176),
-		Size = UDim2.fromOffset(190, 280),
+		Position = UDim2.fromOffset(18, 144),
+		Size = UDim2.fromOffset(164, 226),
 		Parent = window,
 	}, {
 		make("UIListLayout", {
-			Padding = UDim.new(0, 12),
+			Padding = UDim.new(0, 9),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -377,7 +398,7 @@ function CartoonHubUI.new(config)
 		BackgroundColor3 = self.Theme.Stroke,
 		BackgroundTransparency = 0.5,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(238, 0),
+		Position = UDim2.fromOffset(202, 0),
 		Size = UDim2.new(0, 1, 1, 0),
 		Parent = window,
 	})
@@ -387,11 +408,11 @@ function CartoonHubUI.new(config)
 		BackgroundColor3 = Color3.fromRGB(13, 13, 16),
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(264, 76),
-		Size = UDim2.new(1, -288, 1, -100),
+		Position = UDim2.fromOffset(224, 58),
+		Size = UDim2.new(1, -242, 1, -76),
 		Parent = window,
 	}, {
-		corner(26),
+		corner(20),
 		stroke(self.Theme.Stroke, 1, 0.35),
 	})
 
@@ -418,8 +439,10 @@ function CartoonHubUI.new(config)
 	self.ContentClip = contentClip
 	self.NotificationHolder = notificationHolder
 
-	createDragger(titleBar, window)
-	createDragger(titleBar, shadow)
+	createDragger(titleDrag, window)
+	createDragger(titleDrag, shadow)
+	createDragger(profileDrag, window)
+	createDragger(profileDrag, shadow)
 
 	close.Activated:Connect(function()
 		self:SetVisible(false)
@@ -440,8 +463,8 @@ end
 
 function Window:SetVisible(visible)
 	self.Visible = visible
-	local targetSize = visible and UDim2.fromOffset(740, 480) or UDim2.fromOffset(740, 0)
-	local shadowSize = visible and UDim2.fromOffset(762, 502) or UDim2.fromOffset(762, 0)
+	local targetSize = visible and UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y) or UDim2.fromOffset(WINDOW_SIZE.X, 0)
+	local shadowSize = visible and UDim2.fromOffset(SHADOW_SIZE.X, SHADOW_SIZE.Y) or UDim2.fromOffset(SHADOW_SIZE.X, 0)
 	self.Gui.Enabled = true
 	spring(self.Window, { Size = targetSize })
 	spring(self.Shadow, { Size = shadowSize })
@@ -463,7 +486,7 @@ function Window:Notify(options)
 		Name = "Notification",
 		BackgroundColor3 = self.Theme.Panel,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(260, 76),
+		Size = UDim2.fromOffset(240, 70),
 		Parent = self.NotificationHolder,
 	}, {
 		corner(15),
@@ -476,10 +499,10 @@ function Window:Notify(options)
 		Name = "Title",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 23),
+		Size = UDim2.new(1, 0, 0, 21),
 		Text = options.Title or "Heads up!",
 		TextColor3 = self.Theme.Text,
-		TextSize = 17,
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = card,
 	})
@@ -488,8 +511,8 @@ function Window:Notify(options)
 		Name = "Body",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamSemibold,
-		Position = UDim2.fromOffset(0, 27),
-		Size = UDim2.new(1, 0, 0, 30),
+		Position = UDim2.fromOffset(0, 25),
+		Size = UDim2.new(1, 0, 0, 28),
 		Text = options.Body or "",
 		TextColor3 = self.Theme.Muted,
 		TextSize = 12,
@@ -532,7 +555,7 @@ function Window:CreateTab(name, iconText)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 54),
+		Size = UDim2.new(1, 0, 0, 44),
 		Text = "",
 		Parent = self.Sidebar,
 	}, {
@@ -548,7 +571,7 @@ function Window:CreateTab(name, iconText)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -4, 0.5, 0),
-		Size = UDim2.fromOffset(5, 36),
+		Size = UDim2.fromOffset(4, 30),
 		Parent = button,
 	}, {
 		corner(99),
@@ -558,11 +581,11 @@ function Window:CreateTab(name, iconText)
 		Name = "Icon",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(18, 12),
-		Size = UDim2.fromOffset(30, 30),
+		Position = UDim2.fromOffset(14, 8),
+		Size = UDim2.fromOffset(28, 28),
 		Text = iconText or "#",
 		TextColor3 = self.Theme.Muted,
-		TextSize = 19,
+		TextSize = 16,
 		Parent = button,
 	})
 
@@ -570,11 +593,11 @@ function Window:CreateTab(name, iconText)
 		Name = "Label",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(56, 0),
-		Size = UDim2.new(1, -74, 1, 0),
+		Position = UDim2.fromOffset(48, 0),
+		Size = UDim2.new(1, -64, 1, 0),
 		Text = name,
 		TextColor3 = self.Theme.Muted,
-		TextSize = 18,
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = button,
 	})
@@ -585,15 +608,15 @@ function Window:CreateTab(name, iconText)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.fromOffset(0, 0),
-		Position = UDim2.fromOffset(20, 20),
+		Position = UDim2.fromOffset(14, 14),
 		ScrollBarImageColor3 = self.Theme.AccentDark,
 		ScrollBarThickness = 5,
-		Size = UDim2.new(1, -40, 1, -40),
+		Size = UDim2.new(1, -28, 1, -28),
 		Visible = false,
 		Parent = self.ContentClip,
 	}, {
 		make("UIListLayout", {
-			Padding = UDim.new(0, 12),
+			Padding = UDim.new(0, 9),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 		padding(0, 8, 0, 4),
@@ -648,12 +671,12 @@ function Tab:CreateSection(name)
 		Size = UDim2.new(1, -2, 0, 0),
 		Parent = self.Page,
 	}, {
-		corner(22),
+		corner(18),
 		stroke(self.Window.Theme.Stroke, 1, 0.35),
 		gradient(Color3.fromRGB(27, 27, 32), Color3.fromRGB(17, 17, 20), 90),
-		padding(16, 16, 14, 16),
+		padding(12, 12, 10, 12),
 		make("UIListLayout", {
-			Padding = UDim.new(0, 10),
+			Padding = UDim.new(0, 8),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
@@ -662,10 +685,10 @@ function Tab:CreateSection(name)
 		Name = "Header",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, 24),
 		Text = name,
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 22,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = frame,
 	})
@@ -680,10 +703,10 @@ function Section:AddLabel(text)
 		Name = "Label",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 22),
+		Size = UDim2.new(1, 0, 0, 19),
 		Text = text,
 		TextColor3 = self.Window.Theme.Muted,
-		TextSize = 14,
+		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = self.Frame,
 	})
@@ -704,25 +727,25 @@ function Section:AddButton(options)
 		BackgroundColor3 = options.Color or self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 44),
+		Size = UDim2.new(1, 0, 0, 36),
 		Text = options.Name or "Button",
 		TextColor3 = self.Window.Theme.White,
-		TextSize = 16,
+		TextSize = 14,
 		Parent = self.Frame,
 	}, {
-		corner(14),
+		corner(12),
 		stroke(self.Window.Theme.Stroke, 1, 0.25),
 		gradient(Color3.fromRGB(48, 48, 56), Color3.fromRGB(28, 28, 34), 0),
 	})
 
-	textSize(button, 13, 17)
+	textSize(button, 12, 15)
 	addHover(button, options.Color or self.Window.Theme.PanelAlt, self.Window.Theme.PrimaryDark)
 
 	button.Activated:Connect(function()
-		spring(button, { Size = UDim2.new(1, 0, 0, 40) })
+		spring(button, { Size = UDim2.new(1, 0, 0, 33) })
 		task.delay(0.08, function()
 			if button.Parent then
-				spring(button, { Size = UDim2.new(1, 0, 0, 44) })
+				spring(button, { Size = UDim2.new(1, 0, 0, 36) })
 			end
 		end)
 		if options.Callback then
@@ -742,11 +765,11 @@ function Section:AddToggle(options)
 		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 46),
+		Size = UDim2.new(1, 0, 0, 38),
 		Text = "",
 		Parent = self.Frame,
 	}, {
-		corner(14),
+		corner(12),
 		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
@@ -758,7 +781,7 @@ function Section:AddToggle(options)
 		Size = UDim2.new(1, -82, 1, 0),
 		Text = options.Name or "Toggle",
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = row,
 	})
@@ -769,7 +792,7 @@ function Section:AddToggle(options)
 		BackgroundColor3 = value and self.Window.Theme.Primary or Color3.fromRGB(52, 52, 60),
 		BorderSizePixel = 0,
 		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.fromOffset(54, 28),
+		Size = UDim2.fromOffset(46, 24),
 		Parent = row,
 	}, {
 		corner(99),
@@ -780,8 +803,8 @@ function Section:AddToggle(options)
 		Name = "Knob",
 		BackgroundColor3 = self.Window.Theme.White,
 		BorderSizePixel = 0,
-		Position = value and UDim2.fromOffset(28, 4) or UDim2.fromOffset(4, 4),
-		Size = UDim2.fromOffset(20, 20),
+		Position = value and UDim2.fromOffset(24, 4) or UDim2.fromOffset(4, 4),
+		Size = UDim2.fromOffset(16, 16),
 		Parent = track,
 	}, {
 		corner(99),
@@ -793,7 +816,7 @@ function Section:AddToggle(options)
 			BackgroundColor3 = value and self.Window.Theme.Primary or Color3.fromRGB(52, 52, 60),
 		})
 		spring(knob, {
-			Position = value and UDim2.fromOffset(28, 4) or UDim2.fromOffset(4, 4),
+			Position = value and UDim2.fromOffset(24, 4) or UDim2.fromOffset(4, 4),
 		})
 		if options.Callback and not skipCallback then
 			options.Callback(value)
@@ -824,10 +847,10 @@ function Section:AddSlider(options)
 		Name = options.Name or "Slider",
 		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 66),
+		Size = UDim2.new(1, 0, 0, 54),
 		Parent = self.Frame,
 	}, {
-		corner(14),
+		corner(12),
 		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
@@ -835,11 +858,11 @@ function Section:AddSlider(options)
 		Name = "Label",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(14, 8),
-		Size = UDim2.new(1, -100, 0, 20),
+		Position = UDim2.fromOffset(12, 7),
+		Size = UDim2.new(1, -92, 0, 18),
 		Text = options.Name or "Slider",
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = row,
 	})
@@ -849,11 +872,11 @@ function Section:AddSlider(options)
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.new(1, -14, 0, 8),
-		Size = UDim2.fromOffset(72, 20),
+		Position = UDim2.new(1, -12, 0, 7),
+		Size = UDim2.fromOffset(64, 18),
 		Text = tostring(value),
 		TextColor3 = self.Window.Theme.Accent,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = row,
 	})
@@ -862,8 +885,8 @@ function Section:AddSlider(options)
 		Name = "Bar",
 		BackgroundColor3 = Color3.fromRGB(52, 52, 60),
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(14, 40),
-		Size = UDim2.new(1, -28, 0, 12),
+		Position = UDim2.fromOffset(12, 34),
+		Size = UDim2.new(1, -24, 0, 9),
 		Text = "",
 		Parent = row,
 	}, {
@@ -940,10 +963,10 @@ function Section:AddDropdown(options)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 46),
+		Size = UDim2.new(1, 0, 0, 38),
 		Parent = self.Frame,
 	}, {
-		corner(14),
+		corner(12),
 		stroke(self.Window.Theme.Stroke, 1, 0.28),
 		make("UIListLayout", {
 			Padding = UDim.new(0, 4),
@@ -955,7 +978,7 @@ function Section:AddDropdown(options)
 		Name = "Button",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 46),
+		Size = UDim2.new(1, 0, 0, 38),
 		Text = "",
 		Parent = holder,
 	})
@@ -964,11 +987,11 @@ function Section:AddDropdown(options)
 		Name = "Label",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(14, 0),
+		Position = UDim2.fromOffset(12, 0),
 		Size = UDim2.new(0.45, 0, 1, 0),
 		Text = options.Name or "Dropdown",
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = button,
 	})
@@ -978,11 +1001,11 @@ function Section:AddDropdown(options)
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.new(1, -38, 0, 0),
+		Position = UDim2.new(1, -34, 0, 0),
 		Size = UDim2.new(0.5, 0, 1, 0),
 		Text = tostring(selected),
 		TextColor3 = self.Window.Theme.Accent,
-		TextSize = 14,
+		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = button,
 	})
@@ -992,11 +1015,11 @@ function Section:AddDropdown(options)
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.new(1, -14, 0.5, 0),
+		Position = UDim2.new(1, -12, 0.5, 0),
 		Size = UDim2.fromOffset(18, 18),
 		Text = "v",
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 16,
+		TextSize = 14,
 		Parent = button,
 	})
 
@@ -1038,10 +1061,10 @@ function Section:AddDropdown(options)
 				BackgroundColor3 = Color3.fromRGB(36, 36, 42),
 				BorderSizePixel = 0,
 				Font = Enum.Font.GothamBold,
-				Size = UDim2.new(1, 0, 0, 34),
+				Size = UDim2.new(1, 0, 0, 28),
 				Text = tostring(choice),
 				TextColor3 = self.Window.Theme.Text,
-				TextSize = 13,
+				TextSize = 12,
 				Parent = list,
 			}, {
 				corner(10),
@@ -1082,10 +1105,10 @@ function Section:AddTextbox(options)
 		Name = options.Name or "Textbox",
 		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 50),
+		Size = UDim2.new(1, 0, 0, 40),
 		Parent = self.Frame,
 	}, {
-		corner(14),
+		corner(12),
 		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
@@ -1093,11 +1116,11 @@ function Section:AddTextbox(options)
 		Name = "Label",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(14, 0),
+		Position = UDim2.fromOffset(12, 0),
 		Size = UDim2.new(0.36, 0, 1, 0),
 		Text = options.Name or "Text",
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = row,
 	})
@@ -1110,12 +1133,12 @@ function Section:AddTextbox(options)
 		ClearTextOnFocus = false,
 		Font = Enum.Font.GothamBold,
 		PlaceholderText = options.Placeholder or "Type...",
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.new(0.58, 0, 0, 32),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.new(0.58, 0, 0, 28),
 		Text = options.Default or "",
 		TextColor3 = self.Window.Theme.Text,
 		PlaceholderColor3 = self.Window.Theme.Muted,
-		TextSize = 13,
+		TextSize = 12,
 		Parent = row,
 	}, {
 		corner(10),
@@ -1150,11 +1173,11 @@ function Section:AddKeybind(options)
 		BackgroundColor3 = self.Window.Theme.PanelAlt,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
-		Size = UDim2.new(1, 0, 0, 46),
+		Size = UDim2.new(1, 0, 0, 38),
 		Text = "",
 		Parent = self.Frame,
 	}, {
-		corner(14),
+		corner(12),
 		stroke(self.Window.Theme.Stroke, 1, 0.28),
 	})
 
@@ -1162,11 +1185,11 @@ function Section:AddKeybind(options)
 		Name = "Label",
 		BackgroundTransparency = 1,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.fromOffset(14, 0),
+		Position = UDim2.fromOffset(12, 0),
 		Size = UDim2.new(1, -130, 1, 0),
 		Text = options.Name or "Keybind",
 		TextColor3 = self.Window.Theme.Text,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = row,
 	})
@@ -1177,11 +1200,11 @@ function Section:AddKeybind(options)
 		BackgroundColor3 = self.Window.Theme.Primary,
 		BorderSizePixel = 0,
 		Font = Enum.Font.GothamBold,
-		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.fromOffset(92, 30),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(78, 26),
 		Text = currentKey.Name,
 		TextColor3 = self.Window.Theme.White,
-		TextSize = 14,
+		TextSize = 12,
 		Parent = row,
 	}, {
 		corner(10),
@@ -1232,4 +1255,12 @@ function Section:AddKeybind(options)
 	}
 end
 
+local sharedEnvironment
+if typeof(getgenv) == "function" then
+	sharedEnvironment = getgenv()
+else
+	sharedEnvironment = _G
+end
+
+sharedEnvironment.CartoonHubUI = CartoonHubUI
 return CartoonHubUI
