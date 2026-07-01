@@ -4,16 +4,12 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local localPlayer = Players.LocalPlayer
-
--- Module Setup
 local tradeModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TradeModule"))
 local inventoryModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("InventoryModule"))
 local itemModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ItemModule"))
 local profileData = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ProfileData"))
 local sync = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"))
 local itemPopupService = require(ReplicatedStorage:WaitForChild("ClientServices"):WaitForChild("ItemPopupService"))
-
--- ==================== TRADE LOGIC ====================
 local PLACEHOLDER_SENDER_NAME = "RandomPlayer"
 local localOffer = {}
 local theirOffer = {}
@@ -800,7 +796,6 @@ showIncomingTradeRequest = function()
 	})
 end
 
--- ==================== WEAPON SPAWNING LOGIC ====================
 local currentWeaponAmount = 1
 
 local function findWeaponInDatabase(weaponName)
@@ -957,7 +952,6 @@ local function isSpawnerRarity(data)
 	return data.Rarity == "Godly" or data.Rarity == "Ancient"
 end
 
--- ==================== GUI SETUP ====================
 local oldUi = (pcall(function() return CoreGui.Name end) and CoreGui or localPlayer:WaitForChild("PlayerGui")):FindFirstChild("SakaModMenu")
 if oldUi then
 	oldUi:Destroy()
@@ -1193,7 +1187,6 @@ local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
 	end)
 end
 
--- ==================== SPAWNER GUI POPUP ====================
 local SPAWNER_COLS = 5
 local SPAWNER_BOX_SIZE = 94
 local SPAWNER_PADDING = 6
@@ -1266,7 +1259,6 @@ WeaponGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 	WeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, WeaponGrid.AbsoluteContentSize.Y + 10)
 end)
 
--- Popup slider
 local PopupSliderFrame = Instance.new("Frame")
 PopupSliderFrame.Size = UDim2.new(1, -16, 0, SPAWNER_SLIDER_HEIGHT)
 PopupSliderFrame.Position = UDim2.new(0, 8, 1, -(SPAWNER_SLIDER_HEIGHT + 6))
@@ -1472,7 +1464,6 @@ local function populateWeaponSpawner()
 	end
 end
 
--- ==================== SPAWNER TAB BUTTONS ====================
 local SpecificWeaponBox = CreateBox(SpawnerFrame, "Spawn Weapon (e.g. Harvester)")
 local SpawnSpecificBtn = CreateBtn(SpawnerFrame, "SPAWN WEAPON")
 
@@ -1598,7 +1589,6 @@ _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect
 	end
 end)
 
--- Global exports
 _G.CartiHubStartTradeRequest = showIncomingTradeRequest
 _G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
 _G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
