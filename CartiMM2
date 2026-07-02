@@ -2728,6 +2728,16 @@ local function toggleLocalOffer(itemId, itemType)
         return
     end
 
+    for _, offer in ipairs(localOffer) do
+        if offer.ItemID == itemId and offer.ItemType == itemType then
+            offer.Amount = (tonumber(offer.Amount) or 1) + 1
+            applyInventoryDelta(itemId, itemType, -1)
+            redrawLocalTrade()
+            startAcceptCooldown(5)
+            return
+        end
+    end
+
     if #localOffer >= 4 then
         warn("[IncomingTradePopup] Trade offer is full.")
         return
@@ -2767,14 +2777,32 @@ local function getRandomGodlyWeapon()
     return candidates[math.random(1, #candidates)]
 end
 
-local function addRandomGodlyToTheirOffer()
-    if not tradeModule.GUI.TradeGUI.Enabled then
-        warn("[IncomingTradePopup] Open the placeholder trade before adding their random godly.")
-        return
+local function addItemToTheirOfferStack(itemId, itemType, amount)
+    amount = tonumber(amount) or 1
+
+    for _, offer in ipairs(theirOffer) do
+        if offer.ItemID == itemId and offer.ItemType == itemType then
+            offer.Amount = (tonumber(offer.Amount) or 1) + amount
+            return true
+        end
     end
 
     if #theirOffer >= 4 then
-        warn("[IncomingTradePopup] Their offer is full.")
+        return false
+    end
+
+    table.insert(theirOffer, {
+        ItemID = itemId,
+        Amount = amount,
+        ItemType = itemType,
+    })
+
+    return true
+end
+
+local function addRandomGodlyToTheirOffer()
+    if not tradeModule.GUI.TradeGUI.Enabled then
+        warn("[IncomingTradePopup] Open the placeholder trade before adding their random godly.")
         return
     end
 
@@ -2784,7 +2812,11 @@ local function addRandomGodlyToTheirOffer()
         return
     end
 
-    table.insert(theirOffer, item)
+    if not addItemToTheirOfferStack(item.ItemID, item.ItemType, item.Amount or 1) then
+        warn("[IncomingTradePopup] Their offer is full.")
+        return
+    end
+
     drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
@@ -2802,11 +2834,6 @@ addSpecificItemToTheirOffer = function(itemId, itemType)
         return
     end
 
-    if #theirOffer >= 4 then
-        warn("[IncomingTradePopup] Their offer is full.")
-        return
-    end
-
     local itemData = sync[itemType] and sync[itemType][itemId]
     if not itemData then
         warn(("[IncomingTradePopup] Offer-spawner item not found: %s/%s"):format(tostring(itemType), tostring(itemId)))
@@ -2818,11 +2845,10 @@ addSpecificItemToTheirOffer = function(itemId, itemType)
         return
     end
 
-    table.insert(theirOffer, {
-        ItemID = itemId,
-        Amount = 1,
-        ItemType = itemType,
-    })
+    if not addItemToTheirOfferStack(itemId, itemType, 1) then
+        warn("[IncomingTradePopup] Their offer is full.")
+        return
+    end
 
     drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
     resetAcceptUi()
