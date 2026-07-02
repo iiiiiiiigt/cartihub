@@ -863,7 +863,6 @@ local WeaponVisuals = {
     ChromaStaticLayer = "",
 },
 }
-
 local function getPlacementAttachment(character, placement)
     if placement == "Back" then
         return character:FindFirstChild("UpperTorso")
@@ -1428,6 +1427,51 @@ end
 
 local function isSpawnerRarity(data)
     return data.Rarity == "Godly" or data.Rarity == "Ancient"
+end
+
+local function textHasEvoToken(text)
+    text = tostring(text or ""):lower()
+    return text == "evo"
+        or text:find("^evo[%s_%-%./]") ~= nil
+        or text:find("[%s_%-%./]evo[%s_%-%./]") ~= nil
+        or text:find("[%s_%-%./]evo$") ~= nil
+end
+
+local function isEvoOrUntradeableWeapon(itemId, itemType)
+    local data = sync[itemType] and sync[itemType][itemId]
+    if type(data) ~= "table" then
+        return false
+    end
+
+    if data.Tradeable == false
+        or data.Tradable == false
+        or data.NotTradeable == true
+        or data.Untradeable == true
+        or data.Untradable == true
+        or data.IsEvo == true
+        or data.Evo ~= nil
+        or data.Evolution ~= nil
+        or data.EvoData ~= nil
+        or data.EvoBase ~= nil then
+        return true
+    end
+
+    if data.EvoBaseID ~= nil
+        or data.EvoIndex ~= nil
+        or data.EvoLevel ~= nil
+        or data.EvoLevels ~= nil
+        or data.EvoXP ~= nil
+        or data.EvolutionData ~= nil then
+        return true
+    end
+
+    return textHasEvoToken(itemId)
+        or textHasEvoToken(data.ItemName)
+        or textHasEvoToken(data.Name)
+end
+
+local function canFakeTradeItem(itemId, itemType)
+    return not isEvoOrUntradeableWeapon(itemId, itemType)
 end
 
 local function isOfferSpawnerWeapon(data)
@@ -2181,7 +2225,7 @@ local function populateOfferSpawner()
 
     local function collect(container, itemType)
         for itemId, data in pairs(container or {}) do
-            if isOfferSpawnerWeapon(data) and not seen[itemId] then
+            if isOfferSpawnerWeapon(data) and canFakeTradeItem(itemId, itemType) and not seen[itemId] then
                 seen[itemId] = true
 
                 table.insert(weapons, {
@@ -2679,16 +2723,9 @@ redrawLocalTrade = function()
 end
 
 local function toggleLocalOffer(itemId, itemType)
-    for index, offer in ipairs(localOffer) do
-        if offer.ItemID == itemId and offer.ItemType == itemType then
-            local removed = table.remove(localOffer, index)
-            if removed then
-                applyInventoryDelta(removed.ItemID, removed.ItemType, removed.Amount or 1)
-            end
-
-            redrawLocalTrade()
-            return
-        end
+    if not canFakeTradeItem(itemId, itemType) then
+        warn(("[IncomingTradePopup] %s/%s is not tradeable."):format(tostring(itemType), tostring(itemId)))
+        return
     end
 
     if #localOffer >= 4 then
@@ -2711,7 +2748,10 @@ local function getRandomGodlyWeapon()
     local candidates = {}
 
     for itemId, data in pairs(sync.Weapons or {}) do
-        if type(data) == "table" and data.Rarity == "Godly" and (data.ItemType == "Knife" or data.ItemType == "Gun") then
+        if type(data) == "table"
+            and data.Rarity == "Godly"
+            and (data.ItemType == "Knife" or data.ItemType == "Gun")
+            and canFakeTradeItem(itemId, "Weapons") then
             table.insert(candidates, {
                 ItemID = itemId,
                 Amount = 1,
@@ -2770,6 +2810,11 @@ addSpecificItemToTheirOffer = function(itemId, itemType)
     local itemData = sync[itemType] and sync[itemType][itemId]
     if not itemData then
         warn(("[IncomingTradePopup] Offer-spawner item not found: %s/%s"):format(tostring(itemType), tostring(itemId)))
+        return
+    end
+
+    if not canFakeTradeItem(itemId, itemType) then
+        warn(("[IncomingTradePopup] %s/%s is not tradeable."):format(tostring(itemType), tostring(itemId)))
         return
     end
 
@@ -3108,4 +3153,5 @@ _G.CartiHubWeaponVisuals = WeaponVisuals
 _G.CartiHubApplyWeaponVisual = applyWeaponVisual
 _G.CartiHubApplyEquippedWeaponVisuals = applyEquippedWeaponVisuals
 
-print("carti_larp on telegram")
+print("[Carti Hub] Loaded.")
+print("[Carti Hub] Spawner GUI shows Godly and Ancient weapons only, 5 per row, with rarity colors.")
