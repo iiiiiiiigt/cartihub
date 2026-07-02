@@ -3,964 +3,1462 @@ local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local localPlayer = Players.LocalPlayer
+
 local tradeModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TradeModule"))
 local inventoryModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("InventoryModule"))
 local itemModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ItemModule"))
 local profileData = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ProfileData"))
 local sync = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"))
 local itemPopupService = require(ReplicatedStorage:WaitForChild("ClientServices"):WaitForChild("ItemPopupService"))
-local PLACEHOLDER_SENDER_NAME = "RandomPlayer"
-local localOffer = {}
-local theirOffer = {}
-local localAcceptMode = "Accept"
-local localConfirmStartedAt = 0
-local cooldownEndsAt = 0
-local cooldownSequence = 0
-local otherAcceptSequence = 0
-local redrawLocalTrade
-local resetAcceptUi
-local showIncomingTradeRequest
-local installRequestAcceptBridge
-local refreshMainInventoryItem
 
-local function cleanupOldOverlays()
-	local gui = tradeModule.GUI
-	if not gui then
-		return
-	end
+local currentWeaponAmount = 1
+local BUTTON_COLOR = Color3.fromRGB(200, 80, 255)
+local BUTTON_HOVER_COLOR = Color3.fromRGB(220, 100, 255)
+local SakaUI
 
-	for _, root in ipairs({ gui.RequestFrame, gui.TradeGUI }) do
-		if root then
-			for _, descendant in ipairs(root:GetDescendants()) do
-				if descendant.Name == "ClientPlaceholderTradeRemove"
-					or descendant.Name == "ClientPlaceholderTradeToggle"
-					or descendant.Name == "ClientPlaceholderTradeAcceptBridge"
-					or descendant.Name == "ClientPlaceholderTradeAcceptOverlay"
-					or descendant.Name == "ClientPlaceholderTradeActionOverlay" then
-					descendant:Destroy()
-				end
-			end
-		end
-	end
-end
+local function safeParent()
+    local ok = pcall(function()
+        return CoreGui.Name
+    end)
 
-local function clearOfferSlots(offerFrame)
-	if not offerFrame or not offerFrame:FindFirstChild("Container") then
-		return
-	end
+    if ok then
+        return CoreGui
+    end
 
-	for index = 1, 4 do
-		local slot = offerFrame.Container:FindFirstChild("NewItem" .. index)
-		if slot then
-			itemModule.DisplayItem(slot, nil)
-			slot.Visible = false
-		end
-	end
-end
-
-local function copyItemData(itemId, itemType, amount)
-	local source = sync[itemType] and sync[itemType][itemId]
-	if not source then
-		return nil
-	end
-
-	local data = {}
-	for key, value in pairs(source) do
-		data[key] = value
-	end
-	data.DataType = itemType
-	data.Amount = amount or 1
-	return data
+    return localPlayer:WaitForChild("PlayerGui")
 end
 
 local function getProfileOwnedTable(itemType)
-	if itemType == "Weapons" or itemType == "Item" then
-		return profileData.Weapons and profileData.Weapons.Owned
-	elseif itemType == "Pets" then
-		return profileData.Pets and profileData.Pets.Owned
-	end
+    if itemType == "Weapons" or itemType == "Item" then
+        return profileData.Weapons and profileData.Weapons.Owned
+    elseif itemType == "Pets" then
+        return profileData.Pets and profileData.Pets.Owned
+    end
 
-	local bucket = profileData[itemType]
-	return bucket and bucket.Owned
+    local bucket = profileData[itemType]
+    return bucket and bucket.Owned
 end
-
-local function applyInventoryDelta(itemId, itemType, delta)
-	local owned = getProfileOwnedTable(itemType)
-	if not owned then
-		warn(("[IncomingTradePopup] No local owned table for %s/%s"):format(
-			tostring(itemType),
-			tostring(itemId)
-		))
-		return
-	end
-
-	local current = tonumber(owned[itemId]) or 0
-	local nextAmount = current + delta
-	if nextAmount > 0 then
-		owned[itemId] = nextAmount
-	else
-		owned[itemId] = nil
-	end
-
-	local tradeInventory = tradeModule.TradeInventory
-	local entry = tradeInventory
-		and tradeInventory.Data
-		and tradeInventory.Data[itemType]
-		and tradeInventory.Data[itemType].Current
-		and tradeInventory.Data[itemType].Current[itemId]
-
-	if entry then
-		entry.Amount = math.max(0, (tonumber(entry.Amount) or current) + delta)
-		if entry.Frame then
-			if entry.Amount <= 0 then
-				entry.Frame.Visible = false
-			else
-				local itemData = copyItemData(itemId, itemType, entry.Amount)
-				if itemData then
-					itemModule.DisplayItem(entry.Frame, itemData, nil, true)
-				end
-				entry.Frame.Visible = true
-			end
-		end
-	end
-
-	task.defer(function()
-		refreshMainInventoryItem(itemId, itemType)
-	end)
-end
-
-local function restoreLocalOfferToInventory()
-	for _, offer in ipairs(localOffer) do
-		applyInventoryDelta(offer.ItemID, offer.ItemType, offer.Amount or 1)
-	end
-	table.clear(localOffer)
-end
-
-local function addTheirOfferToInventory(offerList)
-	for _, offer in ipairs(offerList or theirOffer) do
-		applyInventoryDelta(offer.ItemID, offer.ItemType, offer.Amount or 1)
-	end
-end
-
-local function getInventoryCategory(itemId, itemType)
-	if itemType ~= "Weapons" and itemType ~= "Item" then
-		return "Current"
-	end
-
-	local data = sync.Weapons and sync.Weapons[itemId]
-	if not data then
-		return "Current"
-	end
-
-	if data.Event == "Christmas" or data.Event == "Halloween" then
-		return data.Event
-	end
-
-	return data.Season and "Current" or "Classic"
-end
-
-local function getMainInventoryContainer(itemType, category)
-	local mainInventory = inventoryModule.GUI
-		and inventoryModule.GUI.MyInventory
-		and inventoryModule.GUI.MyInventory.Main
-	local typeFrame = mainInventory and mainInventory:FindFirstChild(itemType)
-	if not typeFrame then
-		return nil
-	end
-
-	local itemsContainer = typeFrame:FindFirstChild("Items")
-		and typeFrame.Items:FindFirstChild("Container")
-	if not itemsContainer then
-		return nil
-	end
-
-	local categoryFrame = itemsContainer:FindFirstChild(category)
-	if categoryFrame and categoryFrame:FindFirstChild("Container") then
-		return categoryFrame.Container
-	end
-
-	local holiday = itemsContainer:FindFirstChild("Holiday")
-	if holiday and holiday:FindFirstChild("Container") then
-		local holidayCategory = holiday.Container:FindFirstChild(category)
-		if holidayCategory and holidayCategory:FindFirstChild("Container") then
-			return holidayCategory.Container
-		end
-	end
-
-	return nil
-end
-
-local refreshMainInventoryQueued = false
 
 local function clearMainInventoryContainers()
-	local gui = inventoryModule.GUI and inventoryModule.GUI.MyInventory
-	if not gui or not gui.Main then
-		return false
-	end
+    local gui = inventoryModule.GUI and inventoryModule.GUI.MyInventory
+    if not gui or not gui.Main then
+        return false
+    end
 
-	local blank = inventoryModule.CreateBlankInventoryTable()
-	for itemType, categories in pairs(blank) do
-		local typeFrame = gui.Main:FindFirstChild(itemType)
-		local itemsContainer = typeFrame
-			and typeFrame:FindFirstChild("Items")
-			and typeFrame.Items:FindFirstChild("Container")
+    local blank = inventoryModule.CreateBlankInventoryTable()
 
-		if itemsContainer then
-			for categoryName in pairs(categories) do
-				local categoryFrame = itemsContainer:FindFirstChild(categoryName)
-				if not categoryFrame and itemsContainer:FindFirstChild("Holiday") then
-					local holiday = itemsContainer.Holiday:FindFirstChild("Container")
-					categoryFrame = holiday and holiday:FindFirstChild(categoryName)
-				end
+    for itemType, categories in pairs(blank) do
+        local typeFrame = gui.Main:FindFirstChild(itemType)
+        local itemsContainer = typeFrame
+            and typeFrame:FindFirstChild("Items")
+            and typeFrame.Items:FindFirstChild("Container")
 
-				local container = categoryFrame and categoryFrame:FindFirstChild("Container")
-				if container then
-					container:ClearAllChildren()
-				end
-			end
-		end
-	end
+        if itemsContainer then
+            for categoryName in pairs(categories) do
+                local categoryFrame = itemsContainer:FindFirstChild(categoryName)
 
-	return true
+                if not categoryFrame and itemsContainer:FindFirstChild("Holiday") then
+                    local holiday = itemsContainer.Holiday:FindFirstChild("Container")
+                    categoryFrame = holiday and holiday:FindFirstChild(categoryName)
+                end
+
+                local container = categoryFrame and categoryFrame:FindFirstChild("Container")
+                if container then
+                    container:ClearAllChildren()
+                end
+            end
+        end
+    end
+
+    return true
 end
 
 local function refreshMainInventoryNow()
-	local gui = inventoryModule.GUI and inventoryModule.GUI.MyInventory
-	if not gui or not gui.Main then
-		return
-	end
+    local gui = inventoryModule.GUI and inventoryModule.GUI.MyInventory
+    if not gui or not gui.Main then
+        return false
+    end
 
-	if not clearMainInventoryContainers() then
-		return
-	end
+    if not clearMainInventoryContainers() then
+        return false
+    end
 
-	local ok, newInventory = pcall(function()
-		return inventoryModule.GenerateInventory(gui, profileData)
-	end)
-	if not ok then
-		warn("[IncomingTradePopup] Main inventory refresh failed: " .. tostring(newInventory))
-		return
-	end
+    local ok, newInventory = pcall(function()
+        return inventoryModule.GenerateInventory(gui, profileData)
+    end)
 
-	inventoryModule.MyInventory = newInventory
-	pcall(function()
-		inventoryModule.ConnectEquipButtons()
-	end)
-	pcall(function()
-		inventoryModule.UpdateMyEquip()
-	end)
+    if not ok then
+        warn("[Carti Hub] Main inventory refresh failed: " .. tostring(newInventory))
+        return false
+    end
+
+    inventoryModule.MyInventory = newInventory
+
+    pcall(function()
+        inventoryModule.ConnectEquipButtons()
+    end)
+
+    pcall(function()
+        inventoryModule.UpdateMyEquip()
+    end)
+
+    return true
 end
 
-refreshMainInventoryItem = function()
-	if refreshMainInventoryQueued then
-		return
-	end
+-- Fill this table manually. Prefer exact database ids as keys because display names can overlap.
+-- The watcher below applies the matching visual whenever your local equipped knife/gun changes.
+local WeaponVisuals = {
+    ["Flowerwood Gun"] = {
+        Type = "Gun",
+        MeshId = "rbxassetid://16895099893",
+        TextureId = "rbxassetid://16895448237",
+        Scale = Vector3.new(0.05, 0.05, 0.05),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistRight",
+    },
 
-	refreshMainInventoryQueued = true
-	task.defer(function()
-		refreshMainInventoryQueued = false
-		refreshMainInventoryNow()
-	end)
+    ["Lightbringer"] = {
+        Type = "Gun",
+        MeshId = "rbxassetid://4730813852",
+        TextureId = "http://www.roblox.com/asset/?id=4728487789",
+        Scale = Vector3.new(0.05, 0.05, 0.05),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistRight",
+    },
+
+    ["Snowcannon"] = {
+        Type = "Gun",
+        MeshId = "rbxassetid://99836890880541",
+        TextureId = "http://www.roblox.com/asset/?id=122392330922281",
+        Scale = Vector3.new(0.05, 0.05, 0.05),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistRight",
+    },
+
+    ["Gingerscythe"] = {
+        Type = "Knife",
+        MeshId = "rbxassetid://15395668244",
+        TextureId = "http://www.roblox.com/asset/?id=15409195246",
+        Scale = Vector3.new(0.06, 0.06, 0.06),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "Back",
+    },
+
+    ["Luger"] = {
+        Type = "Gun",
+        MeshId = "rbxassetid://95356090",
+        TextureId = "http://www.roblox.com/asset/?id=126534866",
+        Scale = Vector3.new(1.7999999523162842, 1.7999999523162842, 1.7999999523162842),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistRight",
+    },
+
+    ["Darkbringer"] = {
+        Type = "Gun",
+        MeshId = "rbxassetid://4730813852",
+        TextureId = "http://www.roblox.com/asset/?id=4728494788",
+        Scale = Vector3.new(0.05, 0.05, 0.05),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistRight",
+    },
+
+    ["Eternalcane"] = {
+        Type = "Knife",
+        MeshId = "rbxassetid://3132923779",
+        TextureId = "http://www.roblox.com/asset/?id=4488374804",
+        Scale = Vector3.new(0.949999988079071, 0.949999988079071, 0.949999988079071),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistLeft",
+    },
+
+    ["Gingermint"] = {
+        Type = "Gun",
+        MeshId = "rbxassetid://11866444071",
+        TextureId = "rbxassetid://11866444253",
+        Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+        Offset = Vector3.new(0, 0, 0),
+        Placement = "WaistRight",
+    },
+	["Elderwood Scythe"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://4217523241",
+    TextureId = "http://www.roblox.com/asset/?id=4210044808",
+    Scale = Vector3.new(0.07000000029802322, 0.07000000029802322, 0.07000000029802322),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+	Placement = "WaistLeft",
+},
+["Batwing"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset/?id=305826272",
+    TextureId = "rbxassetid://2511673515",
+    Scale = Vector3.new(1, 1, 1),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+},
+["Heartblade"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://6404140078",
+    TextureId = "http://www.roblox.com/asset/?id=6413074818",
+    Scale = Vector3.new(1, 1, 1),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+	Placement = "WaistLeft",
+},
+["Candleflame"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://7791364860",
+    TextureId = "rbxassetid://7791364988",
+    Scale = Vector3.new(0.05999999865889549, 0.05999999865889549, 0.05999999865889549),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+	Placement = "WaistLeft",
+},
+["Makeshift"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://11158364935",
+    TextureId = "http://www.roblox.com/asset/?id=11274360089",
+    Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+},
+["Plasmablade"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://9702732853",
+    TextureId = "rbxassetid://10015130416",
+    Scale = Vector3.new(0.0020000000949949026, 0.0020000000949949026, 0.0020000000949949026),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+},
+["Plasmabeam"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://9702755186",
+    TextureId = "rbxassetid://10015208201",
+    Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+    AttachmentPosition = Vector3.new(0.06429433822631836, 0.05646803602576256, 0.19186615943908691),
+    AttachmentOrientation = Vector3.new(-73.00315856933594, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.2923188805580139, -0.9563208818435669),
+},
+["Harvester"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://7775027413",
+    TextureId = "http://www.roblox.com/asset/?id=7775245551",
+    Scale = Vector3.new(0.05999999865889549, 0.05999999865889549, 0.05999999865889549),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+    AttachmentPosition = Vector3.new(0.1299028992652893, 0.000002229222218375071, 0.07500199228525162),
+    AttachmentOrientation = Vector3.new(-0.0026997302193194628, -60, 90.00231170654297),
+    AttachmentAxis = Vector3.new(0.000020563602447509766, 1, -0.00005862116813659668),
+    AttachmentSecondaryAxis = Vector3.new(-0.5, -0.00004048561822855845, -0.8660253882408142),
+},
+["Bat"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://11182796403",
+    TextureId = "rbxassetid://11192090515",
+    Scale = Vector3.new(0.07000000029802322, 0.07000000029802322, 0.07000000029802322),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    Chroma = false,
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+},
+["ChromaLightbringer"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://4730813852",
+    TextureId = "http://www.roblox.com/asset/?id=4728487789",
+    Scale = Vector3.new(0.039000000804662704, 0.039000000804662704, 0.039000000804662704),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(5.4977863522831256e-15, -0.1866021752357483, 0.12320592254400253),
+    AttachmentOrientation = Vector3.new(-80.00140380859375, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.17362435162067413, -0.9848120212554932),
+    Chroma = true,
+    ChromaTexture = "rbxassetid://4751498862",
+    ChromaStaticLayer = "rbxassetid://18364488166",
+},
+["ChromaCandleflame"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://7791364860",
+    TextureId = "rbxassetid://7791364988",
+    Scale = Vector3.new(0.039000000804662704, 0.039000000804662704, 0.039000000804662704),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+	Placement = "WaistLeft",
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(5.4977863522831256e-15, -0.1866021752357483, 0.12320592254400253),
+    AttachmentOrientation = Vector3.new(-80.00140380859375, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.17362435162067413, -0.9848120212554932),
+    Chroma = true,
+    ChromaTexture = "rbxassetid://4751498862",
+    ChromaStaticLayer = "rbxassetid://18364488166",
+},
+["Vampire's Gun"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://126591885289479",
+    TextureId = "rbxassetid://104946799389637",
+    Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Slate,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, -0.20000000298023224, 0.08990859985351562),
+    AttachmentOrientation = Vector3.new(-50.001827239990234, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.6427633166313171, -0.7660649418830872),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Raygun"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://115447220952926",
+    TextureId = "rbxassetid://127881437685243",
+    Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Slate,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, -0.20000000298023224, 0.08990859985351562),
+    AttachmentOrientation = Vector3.new(-50.001827239990234, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.6427633166313171, -0.7660649418830872),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Nightblade"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset/?id=103838505",
+    TextureId = "http://www.roblox.com/asset/?id=103838996",
+    Scale = Vector3.new(0.699999988079071, 0.44999998807907104, 0.5),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.38823530077934265, 0.37254902720451355, 0.3843137323856354),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+	Placement = "WaistLeft",
+    Reflectance = 0,
+    VertexColor = Vector3.new(0.4000000059604645, 0.4000000059604645, 0.4000000059604645),
+    AttachmentPosition = Vector3.new(0.006067206151783466, 0.15098965167999268, 0.04653354361653328),
+    AttachmentOrientation = Vector3.new(4.996701717376709, -0.15615952014923096, -0.17513397336006165),
+    AttachmentAxis = Vector3.new(0.999992311000824, -0.0030450436752289534, 0.002459252253174782),
+    AttachmentSecondaryAxis = Vector3.new(0.00281926360912621, 0.9961950778961182, 0.08710600435733795),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Icebreaker"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://6124173614",
+    TextureId = "rbxassetid://6124173821",
+    Scale = Vector3.new(1, 1, 1),
+	Placement = "WaistLeft",
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Hallow's Edge"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset?id=179155055",
+    TextureId = "http://www.roblox.com/asset?id=179155105",
+    Scale = Vector3.new(0.550000011920929, 0.550000011920929, 0.5550000071525574),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Eternal IV"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://3132923779",
+    TextureId = "http://www.roblox.com/asset/?id=4999951444",
+    Scale = Vector3.new(0.949999988079071, 0.949999988079071, 0.949999988079071),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Icewing"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://3183449780",
+    TextureId = "rbxassetid://2279588369",
+    Scale = Vector3.new(0.08500000089406967, 0.08500000089406967, 0.08500000089406967),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0.00309753674082458, -0.009521819651126862, 0.20591194927692413),
+    AttachmentOrientation = Vector3.new(-19.19320297241211, 179.1589813232422, 1.235748291015625),
+    AttachmentAxis = Vector3.new(-0.9997638463973999, 0.02036745660007, -0.007585207931697369),
+    AttachmentSecondaryAxis = Vector3.new(0.01673959381878376, 0.9441957473754883, 0.32895931601524353),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Peppermint"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://6085025295",
+    TextureId = "http://www.roblox.com/asset/?id=6074789360",
+    Scale = Vector3.new(0.05999999865889549, 0.05999999865889549, 0.05999999865889549),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Rainbow"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://12921240966",
+    TextureId = "rbxassetid://12921241867",
+    Scale = Vector3.new(0.05999999865889549, 0.05999999865889549, 0.05999999865889549),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+	Placement = "WaistLeft",
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Spirit"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://112444333460928",
+    TextureId = "rbxassetid://131787177447081",
+    Scale = Vector3.new(0.07999999821186066, 0.07999999821186066, 0.07999999821186066),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Slate,
+    Transparency = 0,
+    Reflectance = 0,
+	Placement = "WaistLeft",
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["SeerChroma"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset?id=156092238",
+    TextureId = "rbxassetid://3184059718",
+    Scale = Vector3.new(0.699999988079071, 0.9100000262260437, 1),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0.20000000298023224,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = true,
+    ChromaTexture = "rbxassetid://3184061374",
+    ChromaStaticLayer = "rbxassetid://18364485783",
+},
+["Swirly Gun"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://8310911339",
+    TextureId = "rbxassetid://8293539377",
+    Scale = Vector3.new(0.8999999761581421, 0.8999999761581421, 0.8999999761581421),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Fang"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset/?id=117500241",
+    TextureId = "http://www.roblox.com/asset/?id=117500388",
+    Scale = Vector3.new(0.4000000059604645, 0.3700000047683716, 0.3700000047683716),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.38823530077934265, 0.37254902720451355, 0.3843137323856354),
+    Material = Enum.Material.Concrete,
+    Transparency = 0,
+    Reflectance = 0,
+		Placement = "WaistLeft",
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(-9.536782954455703e-07, -9.536768175166799e-07, -9.536794323139475e-07),
+    AttachmentOrientation = Vector3.new(0.06901711970567703, -92.26690673828125, 1.0130547285079956),
+    AttachmentAxis = Vector3.new(-0.039569735527038574, 0.017680207267403603, 0.9990603923797607),
+    AttachmentSecondaryAxis = Vector3.new(-0.0005041101248934865, 0.9998430609703064, -0.01771402359008789),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Cookieblade"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://6123168377",
+    TextureId = "rbxassetid://6123168583",
+    Scale = Vector3.new(1.2999999523162842, 1.2999999523162842, 1.2999999523162842),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0.20000000298023224,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Evergreen"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://15408280573",
+    TextureId = "rbxassetid://15408244684",
+    Scale = Vector3.new(0.004603884648531675, 0.004603884648531675, 0.004603884648531675),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(1, 0, 0),
+	Placement = "WaistLeft",
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Slasher"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset/?id=283709822",
+    TextureId = "http://www.roblox.com/asset/?id=313894904",
+    Scale = Vector3.new(0.6000000238418579, 0.6000000238418579, 0.6000000238418579),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Icepiercer"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://11868991644",
+    TextureId = "rbxassetid://11869075814",
+    Scale = Vector3.new(1.5, 1.5, 1.5),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0.1299028992652893, 0.000002229222218375071, 0.07500199228525162),
+    AttachmentOrientation = Vector3.new(-0.0026997302193194628, -60, 90.00231170654297),
+    AttachmentAxis = Vector3.new(0.000020563602447509766, 1, -0.00005862116813659668),
+    AttachmentSecondaryAxis = Vector3.new(-0.5, -0.00004048561822855845, -0.8660253882408142),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Purple Seer"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset?id=156092238",
+    TextureId = "rbxassetid://3184063317",
+    Scale = Vector3.new(0.699999988079071, 0.9100000262260437, 1),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+	Placement = "WaistLeft",
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Snowstorm"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://86944837615327",
+    TextureId = "rbxassetid://84853425379784",
+    Scale = Vector3.new(0.07000000029802322, 0.07000000029802322, 0.07000000029802322),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Slate,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Blizzard"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://77235373292363",
+    TextureId = "rbxassetid://131115493735176",
+    Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, -0.20000000298023224, 0.08990859985351562),
+    AttachmentOrientation = Vector3.new(-50.001827239990234, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.6427633166313171, -0.7660649418830872),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Iceblaster"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://6125828567",
+    TextureId = "rbxassetid://6120563948",
+    Scale = Vector3.new(1, 1, 1),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 1, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Ice Shard"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset/?id=188539751 ",
+    TextureId = "http://www.roblox.com/asset/?id=188539820 ",
+    Scale = Vector3.new(1.2000000476837158, 1.2000000476837158, 1.2000000476837158),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(-0.0099992910400033, -0.13704271614551544, -0.17640718817710876),
+    AttachmentOrientation = Vector3.new(-85.05686950683594, -175.63331604003906, 179.4180908203125),
+    AttachmentAxis = Vector3.new(0.9978162050247192, 0.0008751153945922852, -0.06604611873626709),
+    AttachmentSecondaryAxis = Vector3.new(-0.06572528928518295, -0.08616232872009277, -0.9941107630729675),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Candy"] = {
+    Type = "Knife",
+    MeshId = "http://www.roblox.com/asset/?id=19040337",
+    TextureId = "http://www.roblox.com/asset/?id=19040326",
+    Scale = Vector3.new(1.100000023841858, 1.399999976158142, 1.100000023841858),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.8039215803146362, 0.8039215803146362, 0.8039215803146362),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Waves"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://13916938702",
+    TextureId = "rbxassetid://13916939964",
+    Scale = Vector3.new(0.09000000357627869, 0.09000000357627869, 0.09000000357627869),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Logchopper"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://4535643726",
+    TextureId = "rbxassetid://4535641077",
+    Scale = Vector3.new(1, 1, 1),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.06666667014360428, 0.06666667014360428, 0.06666667014360428),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+	Placement = "WaistLeft",
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+["Turkey"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://15320557481",
+    TextureId = "rbxassetid://15320558272",
+    Scale = Vector3.new(0.0560000017285347, 0.0560000017285347, 0.0560000017285347),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+},
+}
+
+local function getPlacementAttachment(character, placement)
+    if placement == "Back" then
+        return character:FindFirstChild("UpperTorso")
+            and character.UpperTorso:FindFirstChild("KnifeBack")
+    elseif placement == "WaistLeft" then
+        return character:FindFirstChild("LowerTorso")
+            and character.LowerTorso:FindFirstChild("KnifeBelt")
+    elseif placement == "WaistRight" then
+        return character:FindFirstChild("LowerTorso")
+            and character.LowerTorso:FindFirstChild("GunBelt")
+    end
+
+    return nil
 end
 
-local function refreshMainInventoryItems()
-	refreshMainInventoryItem()
+local function applyWeaponPlacement(character, display, entry)
+    local placement = entry and entry.Placement
+    if not placement then
+        return
+    end
+
+    local targetAttachment = getPlacementAttachment(character, placement)
+    if not targetAttachment then
+        warn("[Carti Hub] Placement attachment not found:", placement)
+        return
+    end
+
+    local displayAttachment = display:FindFirstChildOfClass("Attachment")
+        or display:FindFirstChild("Attachment", true)
+
+    local constraint = display:FindFirstChildOfClass("RigidConstraint")
+        or display:FindFirstChild("RigidConstraint", true)
+
+    if not displayAttachment or not constraint then
+        warn("[Carti Hub] Display attachment/constraint missing for placement")
+        return
+    end
+
+    if entry.AttachmentPosition then
+        displayAttachment.Position = entry.AttachmentPosition
+    end
+
+    if entry.AttachmentOrientation then
+        displayAttachment.Orientation = entry.AttachmentOrientation
+    end
+
+    if entry.AttachmentAxis then
+        displayAttachment.Axis = entry.AttachmentAxis
+    end
+
+    if entry.AttachmentSecondaryAxis then
+        displayAttachment.SecondaryAxis = entry.AttachmentSecondaryAxis
+    end
+
+    constraint.Attachment0 = displayAttachment
+    constraint.Attachment1 = targetAttachment
 end
 
-local function setLocalAcceptState(mode)
-	local actions = tradeModule.GUI.Actions
-	local accept = actions and actions:FindFirstChild("Accept")
-	if not accept then
-		return
-	end
+local lastAppliedWeaponVisuals = {}
+local lastAppliedWeaponDisplays = {}
+local activeChromaLoops = {}
 
-	localAcceptMode = mode
-
-	if accept:FindFirstChild("Confirm") then
-		accept.Confirm.Visible = mode == "Confirm"
-	end
-	if accept:FindFirstChild("Cancel") then
-		accept.Cancel.Visible = mode == "Waiting" or mode == "BothAccepted"
-	end
-	if accept:FindFirstChild("Cooldown") and mode ~= "Cooldown" then
-		accept.Cooldown.Visible = false
-	end
-
-	if tradeModule.GUI.YourOffer:FindFirstChild("Accepted") then
-		tradeModule.GUI.YourOffer.Accepted.Visible = mode == "Waiting" or mode == "BothAccepted"
-	end
-	if tradeModule.GUI.TheirOffer:FindFirstChild("Accepted") then
-		tradeModule.GUI.TheirOffer.Accepted.Visible = mode == "BothAccepted"
-	end
+local function stopChromaLoop(display)
+    activeChromaLoops[display] = nil
 end
 
-local function promptReceivedTheirOfferItems(offerList)
-	for _, offer in ipairs(offerList or theirOffer) do
-		local ok, err = pcall(function()
-			itemPopupService:AddNewItem(offer.ItemID, offer.ItemType, offer.Amount or 1)
-		end)
-		if not ok then
-			warn(("[IncomingTradePopup] Item popup failed for %s/%s: %s"):format(
-				tostring(offer.ItemType),
-				tostring(offer.ItemID),
-				tostring(err)
-			))
-		end
-	end
+local function startChromaLoop(display, chromaDecal)
+    if activeChromaLoops[display] == chromaDecal then
+        return
+    end
+
+    activeChromaLoops[display] = chromaDecal
+
+    task.spawn(function()
+        local colors = {
+            Color3.fromRGB(255, 0, 0),
+            Color3.fromRGB(255, 255, 0),
+            Color3.fromRGB(0, 255, 0),
+            Color3.fromRGB(0, 255, 255),
+            Color3.fromRGB(0, 0, 255),
+            Color3.fromRGB(255, 0, 255),
+        }
+
+        while activeChromaLoops[display] == chromaDecal and chromaDecal.Parent do
+            for _, color in ipairs(colors) do
+                if activeChromaLoops[display] ~= chromaDecal or not chromaDecal.Parent then
+                    return
+                end
+
+                TweenService:Create(chromaDecal, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+                    Color3 = color,
+                }):Play()
+
+                task.wait(1)
+            end
+        end
+    end)
 end
 
-local function scheduleOtherSideAccept()
-	otherAcceptSequence += 1
-	local sequence = otherAcceptSequence
-	local delaySeconds = math.random(10, 30) / 10
+local function getWeaponVisualEntry(itemId)
+    if not itemId then
+        return nil
+    end
 
-	task.delay(delaySeconds, function()
-		if sequence ~= otherAcceptSequence or localAcceptMode ~= "Waiting" then
-			return
-		end
+    local directEntry = WeaponVisuals[itemId]
+    if directEntry then
+        return directEntry
+    end
 
-		if tradeModule.GUI.TheirOffer:FindFirstChild("Accepted") then
-			tradeModule.GUI.TheirOffer.Accepted.Visible = true
-		end
+    local weaponData = sync.Weapons and sync.Weapons[itemId]
+    local displayName = weaponData and (weaponData.ItemName or weaponData.Name)
 
-		task.delay(1, function()
-			if sequence ~= otherAcceptSequence or localAcceptMode ~= "Waiting" then
-				return
-			end
+    if displayName and WeaponVisuals[displayName] then
+        return WeaponVisuals[displayName]
+    end
 
-			local tradeGui = tradeModule.GUI.TradeGUI
-			local receivedItems = {}
-			for _, offer in ipairs(theirOffer) do
-				table.insert(receivedItems, {
-					ItemID = offer.ItemID,
-					ItemType = offer.ItemType,
-					Amount = offer.Amount or 1,
-				})
-			end
-
-			tradeGui.Enabled = false
-			addTheirOfferToInventory(receivedItems)
-			refreshMainInventoryItems(receivedItems)
-			promptReceivedTheirOfferItems(receivedItems)
-			tradeModule.TradeInventory = nil
-			table.clear(localOffer)
-			table.clear(theirOffer)
-			resetAcceptUi()
-			clearOfferSlots(tradeModule.GUI.YourOffer)
-			clearOfferSlots(tradeModule.GUI.TheirOffer)
-			installRequestAcceptBridge()
-		end)
-	end)
+    return nil
 end
 
-local function startAcceptCooldown(seconds)
-	local actions = tradeModule.GUI.Actions
-	local accept = actions and actions:FindFirstChild("Accept")
-	local cooldown = accept and accept:FindFirstChild("Cooldown")
-	local title = cooldown and cooldown:FindFirstChild("Title")
-	if not cooldown then
-		return
-	end
+local function getDisplayRefNameForWeapon(itemId, entry)
+    if entry and entry.Type == "Gun" then
+        return "DisplayRefGun"
+    elseif entry and (entry.Type == "Knife" or entry.Type == "Sword") then
+        return "DisplayRefKnife"
+    end
 
-	cooldownSequence += 1
-	local sequence = cooldownSequence
-	cooldownEndsAt = time() + seconds
-	localAcceptMode = "Cooldown"
+    local weaponData = sync.Weapons and sync.Weapons[itemId]
+    if weaponData and weaponData.ItemType == "Gun" then
+        return "DisplayRefGun"
+    end
 
-	if accept:FindFirstChild("Confirm") then
-		accept.Confirm.Visible = false
-	end
-	if accept:FindFirstChild("Cancel") then
-		accept.Cancel.Visible = false
-	end
-	if tradeModule.GUI.YourOffer:FindFirstChild("Accepted") then
-		tradeModule.GUI.YourOffer.Accepted.Visible = false
-	end
-
-	cooldown.Visible = true
-
-	task.spawn(function()
-		while sequence == cooldownSequence do
-			local remaining = math.max(0, math.ceil(cooldownEndsAt - time()))
-			if title then
-				title.Text = ("Please wait (%d) before accepting."):format(remaining)
-			end
-			if remaining <= 0 then
-				break
-			end
-			task.wait(0.2)
-		end
-
-		if sequence == cooldownSequence then
-			cooldown.Visible = false
-			localAcceptMode = "Accept"
-		end
-	end)
+    return "DisplayRefKnife"
 end
 
-resetAcceptUi = function()
-	cooldownSequence += 1
-	otherAcceptSequence += 1
-	cooldownEndsAt = 0
-	setLocalAcceptState("Accept")
-
-	local actions = tradeModule.GUI.Actions
-	if actions and actions:FindFirstChild("oldconfirm") then
-		actions.oldconfirm.Visible = false
-	end
+local function entryUsesSurfaceAppearance(entry)
+    return entry
+        and (
+            entry.SurfaceColorMap
+            or entry.SurfaceMetalnessMap
+            or entry.SurfaceNormalMap
+            or entry.SurfaceRoughnessMap
+            or entry.SurfaceAlphaMode
+        )
 end
 
-local function installOfferRemoveButtons()
-	local yourOffer = tradeModule.GUI.YourOffer
-	if not yourOffer or not yourOffer:FindFirstChild("Container") then
-		return
-	end
+local function getDefaultPlacementForEntry(entry)
+    if entry and entry.Placement then
+        return entry.Placement
+    end
 
-	for index = 1, 4 do
-		local slot = yourOffer.Container:FindFirstChild("NewItem" .. index)
-		if slot then
-			local oldOverlay = slot:FindFirstChild("ClientPlaceholderTradeRemove")
-			if oldOverlay then
-				oldOverlay:Destroy()
-			end
+    if entry and entry.Type == "Gun" then
+        return "WaistRight"
+    end
 
-			if localOffer[index] then
-				local overlay = Instance.new("TextButton")
-				overlay.Name = "ClientPlaceholderTradeRemove"
-				overlay.BackgroundTransparency = 1
-				overlay.BorderSizePixel = 0
-				overlay.Text = ""
-				overlay.Size = UDim2.fromScale(1, 1)
-				overlay.Position = UDim2.fromScale(0, 0)
-				overlay.ZIndex = slot.ZIndex + 50
-				overlay.Parent = slot
-
-				overlay.MouseButton1Click:Connect(function()
-					local removed = table.remove(localOffer, index)
-					if removed then
-						applyInventoryDelta(removed.ItemID, removed.ItemType, removed.Amount or 1)
-					end
-					if redrawLocalTrade then
-						redrawLocalTrade()
-					end
-				end)
-			end
-		end
-	end
+    return "Back"
 end
 
-local function drawOfferSlots(offerFrame, offerList)
-	clearOfferSlots(offerFrame)
+local function getExistingConstraintAttachment1(display)
+    local constraint = display:FindFirstChildOfClass("RigidConstraint")
+        or display:FindFirstChild("RigidConstraint", true)
 
-	for index, offer in ipairs(offerList) do
-		local slot = offerFrame
-			and offerFrame:FindFirstChild("Container")
-			and offerFrame.Container:FindFirstChild("NewItem" .. index)
-		local itemData = copyItemData(offer.ItemID, offer.ItemType, offer.Amount)
-
-		if slot and itemData then
-			itemModule.DisplayItem(slot, itemData)
-			slot.Visible = true
-		end
-	end
+    return constraint and constraint.Attachment1
 end
 
-redrawLocalTrade = function()
-	drawOfferSlots(tradeModule.GUI.YourOffer, localOffer)
-	drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
+local function createMeshPartDisplayForSurfaceEntry(character, ref, oldDisplay, entry)
+    if not entryUsesSurfaceAppearance(entry) or oldDisplay:IsA("MeshPart") then
+        return oldDisplay
+    end
 
-	resetAcceptUi()
-	tradeModule.GUI.TheirOffer.Username.Text = "(" .. PLACEHOLDER_SENDER_NAME .. ")"
-	installOfferRemoveButtons()
+    local oldAttachment1 = getExistingConstraintAttachment1(oldDisplay)
+    local replacement = Instance.new("MeshPart")
+    replacement.Name = oldDisplay.Name
+    replacement.CFrame = oldDisplay.CFrame
+    replacement.Anchored = false
+    replacement.CanCollide = false
+    replacement.Massless = true
+    replacement.Color = oldDisplay.Color
+    replacement.Material = oldDisplay.Material
+    replacement.Transparency = oldDisplay.Transparency
+    replacement.Reflectance = oldDisplay.Reflectance
+    replacement.Parent = oldDisplay.Parent
+
+    if entry.MeshId then
+        pcall(function()
+            replacement.MeshId = entry.MeshId
+        end)
+    end
+
+    if entry.TextureId then
+        pcall(function()
+            replacement.TextureID = entry.TextureId
+        end)
+    end
+
+    if entry.MeshPartSize then
+        replacement.Size = entry.MeshPartSize
+    elseif entry.Scale then
+        replacement.Size = entry.Scale
+    else
+        replacement.Size = oldDisplay.Size
+    end
+
+    local attachment = Instance.new("Attachment")
+    attachment.Name = "CustomAttachment"
+    attachment.Position = entry.AttachmentPosition or Vector3.new(0, 0, 0)
+    attachment.Orientation = entry.AttachmentOrientation or Vector3.new(0, 0, 0)
+    attachment.Axis = entry.AttachmentAxis or Vector3.new(1, 0, 0)
+    attachment.SecondaryAxis = entry.AttachmentSecondaryAxis or Vector3.new(0, 1, 0)
+    attachment.Parent = replacement
+
+    local targetAttachment = oldAttachment1 or getPlacementAttachment(character, getDefaultPlacementForEntry(entry))
+    if targetAttachment then
+        local constraint = Instance.new("RigidConstraint")
+        constraint.Attachment0 = attachment
+        constraint.Attachment1 = targetAttachment
+        constraint.Parent = replacement
+    else
+        warn("[Carti Hub] Could not attach MeshPart surface replacement.")
+    end
+
+    ref.Value = replacement
+    stopChromaLoop(oldDisplay)
+    oldDisplay:Destroy()
+
+    return replacement
 end
 
-local function toggleLocalOffer(itemId, itemType)
-	for index, offer in ipairs(localOffer) do
-		if offer.ItemID == itemId and offer.ItemType == itemType then
-			local removed = table.remove(localOffer, index)
-			if removed then
-				applyInventoryDelta(removed.ItemID, removed.ItemType, removed.Amount or 1)
-			end
-			redrawLocalTrade()
-			return
-		end
-	end
+local function applyWeaponVisual(itemId)
+    local entry = getWeaponVisualEntry(itemId)
+    if not entry then
+        return false
+    end
 
-	if #localOffer >= 4 then
-		warn("[IncomingTradePopup] Trade offer is full.")
-		return
-	end
+    local char = localPlayer.Character
+    if not char then
+        return false
+    end
 
-	table.insert(localOffer, {
-		ItemID = itemId,
-		Amount = 1,
-		ItemType = itemType,
-	})
-	applyInventoryDelta(itemId, itemType, -1)
-	redrawLocalTrade()
-	startAcceptCooldown(5)
+    local refName = getDisplayRefNameForWeapon(itemId, entry)
+    local ref = char:FindFirstChild(refName)
+    local display = ref and ref.Value
+
+    if not display then
+        return false
+    end
+
+    display = createMeshPartDisplayForSurfaceEntry(char, ref, display, entry)
+    applyWeaponPlacement(char, display, entry)
+
+    local visualKey = refName .. ":" .. tostring(itemId) .. ":" .. tostring(entry.Placement)
+    if lastAppliedWeaponVisuals[refName] == visualKey and lastAppliedWeaponDisplays[refName] == display then
+        return true
+    end
+
+    if entry.Color then
+        display.Color = entry.Color
+    end
+
+    if entry.Material then
+        display.Material = entry.Material
+    end
+
+    if entry.Transparency ~= nil then
+        display.Transparency = entry.Transparency
+    end
+
+    if entry.Reflectance ~= nil then
+        display.Reflectance = entry.Reflectance
+    end
+
+    if display:IsA("MeshPart") then
+        if entry.MeshId then
+            display.MeshId = entry.MeshId
+        end
+
+        if entry.TextureId then
+            display.TextureID = entry.TextureId
+        end
+
+        if entry.SurfaceColorMap
+            or entry.SurfaceMetalnessMap
+            or entry.SurfaceNormalMap
+            or entry.SurfaceRoughnessMap
+            or entry.SurfaceAlphaMode then
+
+            local surfaceAppearance = display:FindFirstChildOfClass("SurfaceAppearance")
+            if not surfaceAppearance then
+                surfaceAppearance = Instance.new("SurfaceAppearance")
+                surfaceAppearance.Name = "SurfaceAppearance"
+                surfaceAppearance.Parent = display
+            end
+
+            if entry.SurfaceColorMap ~= nil then
+                surfaceAppearance.ColorMap = entry.SurfaceColorMap
+            end
+
+            if entry.SurfaceMetalnessMap ~= nil then
+                surfaceAppearance.MetalnessMap = entry.SurfaceMetalnessMap
+            end
+
+            if entry.SurfaceNormalMap ~= nil then
+                surfaceAppearance.NormalMap = entry.SurfaceNormalMap
+            end
+
+            if entry.SurfaceRoughnessMap ~= nil then
+                surfaceAppearance.RoughnessMap = entry.SurfaceRoughnessMap
+            end
+
+            if entry.SurfaceAlphaMode then
+                surfaceAppearance.AlphaMode = entry.SurfaceAlphaMode
+            end
+        end
+    else
+        local mesh = display:FindFirstChildOfClass("SpecialMesh")
+        if not mesh then
+            return false
+        end
+
+        if entry.MeshId then
+            mesh.MeshId = entry.MeshId
+        end
+
+        if entry.TextureId then
+            mesh.TextureId = entry.TextureId
+        end
+
+        if entry.Scale then
+            mesh.Scale = entry.Scale
+        end
+
+        if entry.VertexColor then
+            mesh.VertexColor = entry.VertexColor
+        end
+
+        mesh.Offset = entry.Offset or Vector3.new(0, 0, 0)
+    end
+
+    if entry.Chroma then
+        local chromaDecal = display:FindFirstChild("Chroma", true)
+
+        if not chromaDecal then
+            chromaDecal = Instance.new("Decal")
+            chromaDecal.Name = "Chroma"
+            chromaDecal.Parent = display
+        end
+
+        chromaDecal.Face = entry.ChromaFace or Enum.NormalId.Back
+
+        if entry.ChromaTexture and entry.ChromaTexture ~= "" then
+            chromaDecal.Texture = entry.ChromaTexture
+        end
+
+        if entry.ChromaStaticLayer and entry.ChromaStaticLayer ~= "" then
+            chromaDecal:SetAttribute("StaticLayer", entry.ChromaStaticLayer)
+        end
+
+        chromaDecal.Color3 = Color3.fromRGB(255, 0, 0)
+        startChromaLoop(display, chromaDecal)
+    else
+        stopChromaLoop(display)
+    end
+
+    lastAppliedWeaponVisuals[refName] = visualKey
+    lastAppliedWeaponDisplays[refName] = display
+    print(("[Carti Hub] Applied visual for %s to %s"):format(tostring(itemId), refName))
+    return true
 end
 
-local function getRandomGodlyWeapon()
-	local candidates = {}
+local function getLocalEquippedWeaponIds()
+    local equipped = profileData.Weapons and profileData.Weapons.Equipped
+    local ids = {}
 
-	for itemId, data in pairs(sync.Weapons or {}) do
-		if type(data) == "table" and data.Rarity == "Godly" and (data.ItemType == "Knife" or data.ItemType == "Gun") then
-			table.insert(candidates, { ItemID = itemId, Amount = 1, ItemType = "Weapons" })
-		end
-	end
+    if type(equipped) ~= "table" then
+        return ids
+    end
 
-	if #candidates < 1 then
-		return nil
-	end
+    for _, itemId in pairs(equipped) do
+        if type(itemId) == "string" then
+            table.insert(ids, itemId)
+        end
+    end
 
-	return candidates[math.random(1, #candidates)]
+    return ids
 end
 
-local function addRandomGodlyToTheirOffer()
-	if not tradeModule.GUI.TradeGUI.Enabled then
-		warn("[IncomingTradePopup] Open the placeholder trade before adding their random godly.")
-		return
-	end
-
-	if #theirOffer >= 4 then
-		warn("[IncomingTradePopup] Their offer is full.")
-		return
-	end
-
-	local item = getRandomGodlyWeapon()
-	if not item then
-		warn("[IncomingTradePopup] No godly knife/gun found in the item database.")
-		return
-	end
-
-	table.insert(theirOffer, item)
-	drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
-	resetAcceptUi()
-	tradeModule.GUI.TheirOffer.Username.Text = "(" .. PLACEHOLDER_SENDER_NAME .. ")"
-	startAcceptCooldown(5)
-	print(("[IncomingTradePopup] Added random godly to their offer: %s/%s"):format(
-		tostring(item.ItemType),
-		tostring(item.ItemID)
-	))
+local function applyEquippedWeaponVisuals()
+    for _, itemId in ipairs(getLocalEquippedWeaponIds()) do
+        applyWeaponVisual(itemId)
+    end
 end
 
-local function removeLastTheirOffer()
-	if not tradeModule.GUI.TradeGUI.Enabled then
-		warn("[IncomingTradePopup] Open the placeholder trade before removing their item.")
-		return
-	end
+task.spawn(function()
+    local lastSignature = ""
 
-	if #theirOffer < 1 then
-		warn("[IncomingTradePopup] Their offer is already empty.")
-		return
-	end
+    while SakaUI == nil or SakaUI.Parent ~= nil do
+        local equippedIds = getLocalEquippedWeaponIds()
+        table.sort(equippedIds)
 
-	local removed = table.remove(theirOffer)
-	drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
-	resetAcceptUi()
-	tradeModule.GUI.TheirOffer.Username.Text = "(" .. PLACEHOLDER_SENDER_NAME .. ")"
-	startAcceptCooldown(5)
-	print(("[IncomingTradePopup] Removed their last offered item: %s/%s"):format(
-		tostring(removed.ItemType),
-		tostring(removed.ItemID)
-	))
-end
+        local signature = table.concat(equippedIds, "|")
+        if signature ~= lastSignature then
+            lastSignature = signature
+            lastAppliedWeaponVisuals = {}
+            lastAppliedWeaponDisplays = {}
+            applyEquippedWeaponVisuals()
+        else
+            applyEquippedWeaponVisuals()
+        end
 
-local function addOverlayClickTarget(parent, itemId, itemType)
-	if not parent or not parent:IsA("GuiObject") then
-		return
-	end
-
-	local oldOverlay = parent:FindFirstChild("ClientPlaceholderTradeToggle")
-	if oldOverlay then
-		oldOverlay:Destroy()
-	end
-
-	local overlay = Instance.new("TextButton")
-	overlay.Name = "ClientPlaceholderTradeToggle"
-	overlay.BackgroundTransparency = 1
-	overlay.BorderSizePixel = 0
-	overlay.Text = ""
-	overlay.Size = UDim2.fromScale(1, 1)
-	overlay.Position = UDim2.fromScale(0, 0)
-	overlay.ZIndex = parent.ZIndex + 100
-	overlay.Parent = parent
-
-	overlay.MouseButton1Click:Connect(function()
-		toggleLocalOffer(itemId, itemType)
-	end)
-end
-
-local function addActionOverlay(parent, callback)
-	if not parent or not parent:IsA("GuiObject") then
-		return
-	end
-
-	local oldOverlay = parent:FindFirstChild("ClientPlaceholderTradeActionOverlay")
-	if oldOverlay then
-		oldOverlay:Destroy()
-	end
-
-	local overlay = Instance.new("TextButton")
-	overlay.Name = "ClientPlaceholderTradeActionOverlay"
-	overlay.BackgroundTransparency = 1
-	overlay.BorderSizePixel = 0
-	overlay.Text = ""
-	overlay.Size = UDim2.fromScale(1, 1)
-	overlay.Position = UDim2.fromScale(0, 0)
-	overlay.ZIndex = parent.ZIndex + 100
-	overlay.Parent = parent
-
-	overlay.MouseButton1Click:Connect(callback)
-end
-
-local function installTradeActionButtons()
-	local actions = tradeModule.GUI.Actions
-	if not actions then
-		return
-	end
-
-	local accept = actions:FindFirstChild("Accept")
-	local decline = actions:FindFirstChild("Decline")
-
-	if accept then
-		addActionOverlay(accept:FindFirstChild("ActionButton"), function()
-			if localAcceptMode == "Accept" and time() >= cooldownEndsAt then
-				localConfirmStartedAt = time()
-				setLocalAcceptState("Confirm")
-			end
-		end)
-
-		local confirmButton = accept:FindFirstChild("Confirm")
-			and accept.Confirm:FindFirstChild("ActionButton")
-		addActionOverlay(confirmButton, function()
-			if localAcceptMode == "Confirm" and time() - localConfirmStartedAt >= 0.4 then
-				setLocalAcceptState("Waiting")
-				scheduleOtherSideAccept()
-			end
-		end)
-
-		local cancelButton = accept:FindFirstChild("Cancel")
-			and accept.Cancel:FindFirstChild("ActionButton")
-		addActionOverlay(cancelButton, function()
-			resetAcceptUi()
-		end)
-	end
-
-	if decline then
-		addActionOverlay(decline:FindFirstChild("ActionButton"), function()
-			tradeModule.GUI.TradeGUI.Enabled = false
-			tradeModule.TradeInventory = nil
-			restoreLocalOfferToInventory()
-			table.clear(theirOffer)
-			resetAcceptUi()
-		end)
-	end
-end
-
-local function installInventoryToggleButtons()
-	local tradeInventory = tradeModule.TradeInventory
-	if not tradeInventory or not tradeInventory.Data then
-		return
-	end
-
-	for itemType, categories in pairs(tradeInventory.Data) do
-		for _, items in pairs(categories) do
-			for itemId, entry in pairs(items) do
-				local frame = entry.Frame
-				local actionButton = frame
-					and frame:FindFirstChild("Container")
-					and frame.Container:FindFirstChild("ActionButton")
-
-				if actionButton and actionButton:IsA("GuiObject") then
-					addOverlayClickTarget(actionButton, itemId, itemType)
-				elseif frame and frame:IsA("GuiObject") then
-					addOverlayClickTarget(frame, itemId, itemType)
-				end
-			end
-		end
-	end
-end
-
-local function openTradeFrameFromAccept()
-	local tradeGui = tradeModule.GUI.TradeGUI
-	local tradeContainer = tradeGui.Container
-	restoreLocalOfferToInventory()
-	table.clear(theirOffer)
-	resetAcceptUi()
-
-	for _, categoryName in ipairs({ "Weapons", "Pets" }) do
-		local category = tradeContainer.Items.Main:FindFirstChild(categoryName)
-		if category and category:FindFirstChild("Items") and category.Items:FindFirstChild("Container") then
-			for _, section in ipairs(category.Items.Container:GetChildren()) do
-				local container = section:FindFirstChild("Container")
-				if container then
-					container:ClearAllChildren()
-				end
-			end
-		end
-	end
-
-	tradeModule.TradeInventory = inventoryModule.GenerateInventory(
-		tradeContainer.Items,
-		profileData,
-		"Trading",
-		tradeModule.GUI.ItemsLayout
-	)
-	tradeModule.ConnectOfferButtons(tradeModule.TradeInventory)
-
-	redrawLocalTrade()
-
-	tradeModule.GUI.TheirOffer.Username.Text = "(" .. PLACEHOLDER_SENDER_NAME .. ")"
-	tradeModule.GUI.RequestFrame.Visible = false
-	tradeGui.Enabled = true
-
-	task.defer(installInventoryToggleButtons)
-	task.delay(0.5, installInventoryToggleButtons)
-	installTradeActionButtons()
-end
-
-local requestFrame = tradeModule.GUI.RequestFrame
-local receivingRequest = requestFrame:WaitForChild("ReceivingRequest")
-local acceptButton = receivingRequest:WaitForChild("Accept")
-local requestAcceptSession = 0
-local requestAcceptConnection
-
-cleanupOldOverlays()
-
-installRequestAcceptBridge = function()
-	requestAcceptSession += 1
-	local session = requestAcceptSession
-	local opened = false
-
-	if requestAcceptConnection then
-		requestAcceptConnection:Disconnect()
-		requestAcceptConnection = nil
-	end
-
-	local oldBridge = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptBridge")
-	if oldBridge then
-		oldBridge:Destroy()
-	end
-
-	local oldOverlay = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptOverlay")
-	if oldOverlay then
-		oldOverlay:Destroy()
-	end
-
-	local bridge = Instance.new("BoolValue")
-	bridge.Name = "ClientPlaceholderTradeAcceptBridge"
-	bridge.Parent = acceptButton
-
-	local overlay = Instance.new("TextButton")
-	overlay.Name = "ClientPlaceholderTradeAcceptOverlay"
-	overlay.BackgroundTransparency = 1
-	overlay.BorderSizePixel = 0
-	overlay.Text = ""
-	overlay.Size = UDim2.fromScale(1, 1)
-	overlay.Position = UDim2.fromScale(0, 0)
-	overlay.ZIndex = acceptButton.ZIndex + 100
-	overlay.Parent = acceptButton
-
-	local function openOnce()
-		if opened or session ~= requestAcceptSession or not bridge.Parent then
-			return
-		end
-
-		opened = true
-		bridge:Destroy()
-		if overlay.Parent then
-			overlay:Destroy()
-		end
-		if requestAcceptConnection then
-			requestAcceptConnection:Disconnect()
-			requestAcceptConnection = nil
-		end
-		task.defer(openTradeFrameFromAccept)
-	end
-
-	overlay.MouseButton1Click:Connect(openOnce)
-	requestAcceptConnection = acceptButton.MouseButton1Click:Connect(function()
-		task.defer(openOnce)
-	end)
-end
-
-showIncomingTradeRequest = function()
-	installRequestAcceptBridge()
-	tradeModule.UpdateTradeRequestWindow("ReceivingRequest", {
-		Sender = {
-			Name = PLACEHOLDER_SENDER_NAME,
-		},
-	})
-end
-
-local currentWeaponAmount = 1
+        task.wait(0.35)
+    end
+end)
 
 local function findWeaponInDatabase(weaponName)
-	if not weaponName or weaponName == "" then
-		return nil
-	end
+    if not weaponName or weaponName == "" then
+        return nil
+    end
 
-	local searchName = tostring(weaponName):lower()
+    local searchName = tostring(weaponName):lower()
 
-	local function search(container, itemType)
-		for itemId, data in pairs(container or {}) do
-			if type(data) == "table" then
-				local displayName = data.ItemName or data.Name or itemId
-				local idText = tostring(itemId)
+    local function search(container, itemType)
+        for itemId, data in pairs(container or {}) do
+            if type(data) == "table" then
+                local displayName = data.ItemName or data.Name or itemId
+                local idText = tostring(itemId)
 
-				if tostring(displayName):lower() == searchName
-					or tostring(displayName):lower():find(searchName, 1, true)
-					or idText:lower() == searchName
-					or idText:lower():find(searchName, 1, true) then
-					return itemId, itemType, displayName
-				end
-			end
-		end
-	end
+                if tostring(displayName):lower() == searchName
+                    or tostring(displayName):lower():find(searchName, 1, true)
+                    or idText:lower() == searchName
+                    or idText:lower():find(searchName, 1, true) then
+                    return itemId, itemType, displayName
+                end
+            end
+        end
+    end
 
-	local itemId, itemType, displayName = search(sync.Weapons, "Weapons")
-	if itemId then
-		return itemId, itemType, displayName
-	end
+    local itemId, itemType, displayName = search(sync.Weapons, "Weapons")
+    if itemId then
+        return itemId, itemType, displayName
+    end
 
-	return search(sync.Item, "Item")
+    return search(sync.Item, "Item")
 end
 
 local function spawnWeapon(weaponNameOrId, amount)
-	local itemId, itemType, displayName = findWeaponInDatabase(weaponNameOrId)
+    local itemId, itemType, displayName = findWeaponInDatabase(weaponNameOrId)
 
-	if not itemId then
-		warn("[Carti Hub] Weapon not found: " .. tostring(weaponNameOrId))
-		return false
-	end
+    if not itemId then
+        warn("[Carti Hub] Weapon not found: " .. tostring(weaponNameOrId))
+        return false
+    end
 
-	amount = tonumber(amount) or 1
-	amount = math.max(1, amount)
+    amount = tonumber(amount) or 1
+    amount = math.max(1, amount)
 
-	local owned = getProfileOwnedTable(itemType)
-	if not owned then
-		warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
-		return false
-	end
+    local owned = getProfileOwnedTable(itemType)
+    if not owned then
+        warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
+        return false
+    end
 
-	local current = tonumber(owned[itemId]) or 0
-	owned[itemId] = current + amount
+    local current = tonumber(owned[itemId]) or 0
+    owned[itemId] = current + amount
 
-	refreshMainInventoryNow()
+    refreshMainInventoryNow()
 
-	for _ = 1, math.min(amount, 10) do
-		pcall(function()
-			itemPopupService:AddNewItem(itemId, itemType, 1)
-		end)
-	end
+    for _ = 1, math.min(amount, 10) do
+        pcall(function()
+            itemPopupService:AddNewItem(itemId, itemType, 1)
+        end)
+    end
 
-	print(("[Carti Hub] Spawned %dx %s (%s/%s)"):format(amount, displayName or weaponNameOrId, itemType, itemId))
-	return true
+    print(("[Carti Hub] Spawned %dx %s (%s/%s)"):format(amount, displayName or weaponNameOrId, itemType, itemId))
+    return true
 end
 
 local function spawnWeaponById(itemId, itemType, amount)
-	local itemData = sync[itemType] and sync[itemType][itemId]
+    local itemData = sync[itemType] and sync[itemType][itemId]
 
-	if not itemData then
-		warn(("[Carti Hub] Weapon id not found: %s/%s"):format(tostring(itemType), tostring(itemId)))
-		return false
-	end
+    if not itemData then
+        warn(("[Carti Hub] Weapon id not found: %s/%s"):format(tostring(itemType), tostring(itemId)))
+        return false
+    end
 
-	amount = tonumber(amount) or 1
-	amount = math.max(1, amount)
+    amount = tonumber(amount) or 1
+    amount = math.max(1, amount)
 
-	local owned = getProfileOwnedTable(itemType)
-	if not owned then
-		warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
-		return false
-	end
+    local owned = getProfileOwnedTable(itemType)
+    if not owned then
+        warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
+        return false
+    end
 
-	local current = tonumber(owned[itemId]) or 0
-	owned[itemId] = current + amount
+    local current = tonumber(owned[itemId]) or 0
+    owned[itemId] = current + amount
 
-	refreshMainInventoryNow()
+    refreshMainInventoryNow()
 
-	for _ = 1, math.min(amount, 10) do
-		pcall(function()
-			itemPopupService:AddNewItem(itemId, itemType, 1)
-		end)
-	end
+    for _ = 1, math.min(amount, 10) do
+        pcall(function()
+            itemPopupService:AddNewItem(itemId, itemType, 1)
+        end)
+    end
 
-	local displayName = itemData.ItemName or itemData.Name or itemId
-	print(("[Carti Hub] Spawned %dx %s (%s/%s)"):format(amount, displayName, itemType, itemId))
-	return true
+    local displayName = itemData.ItemName or itemData.Name or itemId
+    print(("[Carti Hub] Spawned %dx %s (%s/%s)"):format(amount, displayName, itemType, itemId))
+    return true
 end
 
 local function spawnAllGodlyWeapons(amount)
-	amount = tonumber(amount) or 1
-	amount = math.max(1, amount)
+    amount = tonumber(amount) or 1
+    amount = math.max(1, amount)
 
-	local spawnedCount = 0
-	local seen = {}
+    local spawnedCount = 0
+    local seen = {}
 
-	local function collect(container, itemType)
-		for itemId, data in pairs(container or {}) do
-			if type(data) == "table" and data.Rarity == "Godly" and not seen[itemId] then
-				seen[itemId] = true
+    local function collect(container, itemType)
+        for itemId, data in pairs(container or {}) do
+            if type(data) == "table" and data.Rarity == "Godly" and not seen[itemId] then
+                seen[itemId] = true
 
-				local owned = getProfileOwnedTable(itemType)
-				if owned then
-					local current = tonumber(owned[itemId]) or 0
-					owned[itemId] = current + amount
-					spawnedCount += 1
-				end
-			end
-		end
-	end
+                local owned = getProfileOwnedTable(itemType)
+                if owned then
+                    local current = tonumber(owned[itemId]) or 0
+                    owned[itemId] = current + amount
+                    spawnedCount += 1
+                end
+            end
+        end
+    end
 
-	collect(sync.Weapons, "Weapons")
-	collect(sync.Item, "Item")
-	refreshMainInventoryNow()
+    collect(sync.Weapons, "Weapons")
+    collect(sync.Item, "Item")
+    refreshMainInventoryNow()
 
-	print(("[Carti Hub] Spawned %dx of %d godly weapons"):format(amount, spawnedCount))
-	return spawnedCount
+    print(("[Carti Hub] Spawned %dx of %d godly weapons"):format(amount, spawnedCount))
+    return spawnedCount
 end
 
 local function getRarityColor(rarity)
-	local rarities = sync.Rarities or sync.Rarity
-	local rarityData = rarities and rarities[rarity]
+    local rarities = sync.Rarities or sync.Rarity
+    local rarityData = rarities and rarities[rarity]
 
-	if rarityData then
-		if typeof(rarityData.Color) == "Color3" then
-			return rarityData.Color
-		end
+    if rarityData then
+        if typeof(rarityData.Color) == "Color3" then
+            return rarityData.Color
+        end
 
-		if type(rarityData.Hex) == "string" then
-			local hex = rarityData.Hex:gsub("#", "")
-			if #hex == 6 then
-				return Color3.fromRGB(
-					tonumber(hex:sub(1, 2), 16),
-					tonumber(hex:sub(3, 4), 16),
-					tonumber(hex:sub(5, 6), 16)
-				)
-			end
-		end
-	end
+        if type(rarityData.Hex) == "string" then
+            local hex = rarityData.Hex:gsub("#", "")
+            if #hex == 6 then
+                return Color3.fromRGB(
+                    tonumber(hex:sub(1, 2), 16),
+                    tonumber(hex:sub(3, 4), 16),
+                    tonumber(hex:sub(5, 6), 16)
+                )
+            end
+        end
+    end
 
-	return Color3.fromRGB(200, 100, 255)
+    return Color3.fromRGB(200, 100, 255)
 end
 
 local function isSpawnerRarity(data)
-	return data.Rarity == "Godly" or data.Rarity == "Ancient"
+    return data.Rarity == "Godly" or data.Rarity == "Ancient"
 end
 
-local oldUi = (pcall(function() return CoreGui.Name end) and CoreGui or localPlayer:WaitForChild("PlayerGui")):FindFirstChild("SakaModMenu")
+local function isOfferSpawnerWeapon(data)
+    if type(data) ~= "table" then
+        return false
+    end
+
+    if data.Rarity == "Unique" then
+        return false
+    end
+
+    if data.Rarity ~= "Godly" and data.Rarity ~= "Ancient" then
+        return false
+    end
+
+    local itemType = tostring(data.ItemType or data.Type or ""):lower()
+    return itemType == "knife" or itemType == "sword"
+end
+
+local addSpecificItemToTheirOffer
+local removeLastTheirOffer
+
+local oldUi = safeParent():FindFirstChild("SakaModMenu")
 if oldUi then
-	oldUi:Destroy()
+    oldUi:Destroy()
 end
 
-local SakaUI = Instance.new("ScreenGui")
+SakaUI = Instance.new("ScreenGui")
 SakaUI.Name = "SakaModMenu"
 SakaUI.ResetOnSpawn = false
-SakaUI.Parent = (pcall(function() return CoreGui.Name end) and CoreGui) or localPlayer:WaitForChild("PlayerGui")
+SakaUI.Parent = safeParent()
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 300, 0, 560)
@@ -971,23 +1469,24 @@ MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = SakaUI
 
--- Galaxy Gradient Background
-local Gradient = Instance.new("UIGradient", MainFrame)
+local Gradient = Instance.new("UIGradient")
 Gradient.Rotation = 45
 Gradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(130, 50, 210)),
-	ColorSequenceKeypoint.new(0.25, Color3.fromRGB(180, 70, 230)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 100, 255)),
-	ColorSequenceKeypoint.new(0.75, Color3.fromRGB(160, 60, 220)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 35, 180))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(130, 50, 210)),
+    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(180, 70, 230)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 100, 255)),
+    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(160, 60, 220)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 35, 180)),
 })
+Gradient.Parent = MainFrame
 
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 16)
 
-local BorderStroke = Instance.new("UIStroke", MainFrame)
+local BorderStroke = Instance.new("UIStroke")
 BorderStroke.Color = Color3.fromRGB(220, 120, 255)
 BorderStroke.Thickness = 2
 BorderStroke.Transparency = 0.15
+BorderStroke.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 50)
@@ -1009,9 +1508,8 @@ CloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 22
 CloseBtn.Parent = MainFrame
-
 CloseBtn.MouseButton1Click:Connect(function()
-	SakaUI:Destroy()
+    SakaUI:Destroy()
 end)
 
 local TabContainer = Instance.new("Frame")
@@ -1020,36 +1518,151 @@ TabContainer.Position = UDim2.new(0, 10, 0, 55)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = MainFrame
 
-local TabLayout = Instance.new("UIListLayout", TabContainer)
+local TabLayout = Instance.new("UIListLayout")
 TabLayout.FillDirection = Enum.FillDirection.Horizontal
 TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 TabLayout.Padding = UDim.new(0, 5)
+TabLayout.Parent = TabContainer
 
 local function CreateTabBtn(text, order)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.23, -4, 1, 0)
-	btn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-	btn.Text = text
-	btn.TextColor3 = Color3.fromRGB(255, 240, 255)
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 12
-	btn.LayoutOrder = order
-	btn.Parent = TabContainer
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.23, -4, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 240, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.LayoutOrder = order
+    btn.Parent = TabContainer
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    return btn
+end
 
-	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.2), {
-			BackgroundColor3 = Color3.fromRGB(200, 80, 255)
-		}):Play()
-	end)
+local function CreateTabFrame()
+    local frame = Instance.new("ScrollingFrame")
+    frame.Size = UDim2.new(1, -20, 1, -105)
+    frame.Position = UDim2.new(0, 10, 0, 100)
+    frame.BackgroundTransparency = 1
+    frame.BorderSizePixel = 0
+    frame.ScrollBarThickness = 4
+    frame.CanvasSize = UDim2.new(0, 0, 1.45, 0)
+    frame.Visible = false
+    frame.Parent = MainFrame
 
-	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.2), {
-			BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-		}):Play()
-	end)
+    local list = Instance.new("UIListLayout")
+    list.SortOrder = Enum.SortOrder.LayoutOrder
+    list.Padding = UDim.new(0, 10)
+    list.Parent = frame
 
-	return btn
+    return frame
+end
+
+local function CreateBox(parent, placeholder)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, 0, 0, 38)
+    box.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    box.PlaceholderText = placeholder
+    box.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(255, 245, 255)
+    box.Font = Enum.Font.Gotham
+    box.TextSize = 13
+    box.Parent = parent
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(200, 100, 255)
+    stroke.Thickness = 1
+    stroke.Transparency = 0.2
+    stroke.Parent = box
+
+    return box
+end
+
+local function CreateBtn(parent, text)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 42)
+    btn.BackgroundColor3 = BUTTON_COLOR
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), { BackgroundColor3 = BUTTON_HOVER_COLOR }):Play()
+    end)
+
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), { BackgroundColor3 = BUTTON_COLOR }):Play()
+    end)
+
+    return btn
+end
+
+local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 0, 50)
+    container.BackgroundTransparency = 1
+    container.Parent = parent
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 22)
+    label.BackgroundTransparency = 1
+    label.Text = text .. ": " .. defaultVal
+    label.Font = Enum.Font.GothamBold
+    label.TextColor3 = Color3.fromRGB(230, 200, 255)
+    label.TextSize = 13
+    label.Parent = container
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, -10, 0, 10)
+    bg.Position = UDim2.new(0, 5, 0, 28)
+    bg.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+    bg.Parent = container
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.BackgroundColor3 = BUTTON_COLOR
+    fill.Size = UDim2.new((defaultVal - min) / (max - min), 0, 1, 0)
+    fill.Parent = bg
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local knob = Instance.new("TextButton")
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.Position = UDim2.new(1, -9, 0.5, -9)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 235, 255)
+    knob.Text = ""
+    knob.Parent = fill
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
+    local dragging = false
+
+    knob.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local mousePos = UserInputService:GetMouseLocation().X
+            local startX = bg.AbsolutePosition.X
+            local percent = math.clamp((mousePos - startX) / bg.AbsoluteSize.X, 0, 1)
+            local rawVal = min + ((max - min) * percent)
+            local val = math.floor(rawVal / step + 0.5) * step
+            val = math.clamp(val, min, max)
+
+            fill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0)
+            label.Text = text .. ": " .. val
+            callback(val)
+        end
+    end)
 end
 
 local SpawnerTabBtn = CreateTabBtn("Spawner", 1)
@@ -1057,135 +1670,12 @@ local TradeTabBtn = CreateTabBtn("Trade", 2)
 local SettingsTabBtn = CreateTabBtn("Settings", 3)
 local KeybindsTabBtn = CreateTabBtn("Keys", 4)
 
-SpawnerTabBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 255)
-
-local function CreateTabFrame()
-	local frame = Instance.new("ScrollingFrame")
-	frame.Size = UDim2.new(1, -20, 1, -105)
-	frame.Position = UDim2.new(0, 10, 0, 100)
-	frame.BackgroundTransparency = 1
-	frame.BorderSizePixel = 0
-	frame.ScrollBarThickness = 4
-	frame.CanvasSize = UDim2.new(0, 0, 1.45, 0)
-	frame.Visible = false
-	frame.Parent = MainFrame
-
-	frame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
-
-	local list = Instance.new("UIListLayout", frame)
-	list.SortOrder = Enum.SortOrder.LayoutOrder
-	list.Padding = UDim.new(0, 10)
-	return frame
-end
-
-local SpawnerFrame = CreateTabFrame(); SpawnerFrame.Visible = true
+local SpawnerFrame = CreateTabFrame()
 local TradeFrame = CreateTabFrame()
 local SettingsFrame = CreateTabFrame()
 local KeybindsFrame = CreateTabFrame()
-
-local function CreateBox(parent, placeholder)
-	local box = Instance.new("TextBox")
-	box.Size = UDim2.new(1, 0, 0, 38)
-	box.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
-	box.PlaceholderText = placeholder
-	box.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
-	box.Text = ""
-	box.TextColor3 = Color3.fromRGB(255, 245, 255)
-	box.Font = Enum.Font.Gotham
-	box.TextSize = 13
-	box.Parent = parent
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
-
-	local boxStroke = Instance.new("UIStroke", box)
-	boxStroke.Color = Color3.fromRGB(200, 100, 255)
-	boxStroke.Thickness = 1
-	boxStroke.Transparency = 0.2
-
-	return box
-end
-
-local BUTTON_COLOR = Color3.fromRGB(200, 80, 255)
-local BUTTON_HOVER_COLOR = Color3.fromRGB(220, 100, 255)
-
-local function CreateBtn(parent, text)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, 0, 0, 42)
-	btn.BackgroundColor3 = BUTTON_COLOR
-	btn.Text = text
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 13
-	btn.Parent = parent
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-
-	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.2), {
-			BackgroundColor3 = BUTTON_HOVER_COLOR
-		}):Play()
-	end)
-
-	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.2), {
-			BackgroundColor3 = BUTTON_COLOR
-		}):Play()
-	end)
-
-	return btn
-end
-
-local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
-	local container = Instance.new("Frame", parent)
-	container.Size = UDim2.new(1, 0, 0, 50)
-	container.BackgroundTransparency = 1
-
-	local label = Instance.new("TextLabel", container)
-	label.Size = UDim2.new(1, 0, 0, 22)
-	label.BackgroundTransparency = 1
-	label.Text = text .. ": " .. defaultVal
-	label.Font = Enum.Font.GothamBold
-	label.TextColor3 = Color3.fromRGB(230, 200, 255)
-	label.TextSize = 13
-
-	local bg = Instance.new("Frame", container)
-	bg.Size = UDim2.new(1, -10, 0, 10)
-	bg.Position = UDim2.new(0, 5, 0, 28)
-	bg.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
-	Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
-
-	local fill = Instance.new("Frame", bg)
-	fill.BackgroundColor3 = BUTTON_COLOR
-	fill.Size = UDim2.new((defaultVal - min) / (max - min), 0, 1, 0)
-	Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-	local knob = Instance.new("TextButton", fill)
-	knob.Size = UDim2.new(0, 18, 0, 18)
-	knob.Position = UDim2.new(1, -9, 0.5, -9)
-	knob.BackgroundColor3 = Color3.fromRGB(255, 235, 255)
-	knob.Text = ""
-	Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-
-	local dragging = false
-	knob.MouseButton1Down:Connect(function() dragging = true end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			local mousePos = UserInputService:GetMouseLocation().X
-			local startX = bg.AbsolutePosition.X
-			local percent = math.clamp((mousePos - startX) / bg.AbsoluteSize.X, 0, 1)
-			local rawVal = min + ((max - min) * percent)
-			local val = math.floor(rawVal / step + 0.5) * step
-			val = math.clamp(val, min, max)
-			fill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0)
-			label.Text = text .. ": " .. val
-			callback(val)
-		end
-	end)
-end
+SpawnerFrame.Visible = true
+SpawnerTabBtn.BackgroundColor3 = BUTTON_HOVER_COLOR
 
 local SPAWNER_COLS = 5
 local SPAWNER_BOX_SIZE = 94
@@ -1205,13 +1695,13 @@ SpawnerGuiFrame.Active = true
 SpawnerGuiFrame.Draggable = true
 SpawnerGuiFrame.Visible = false
 SpawnerGuiFrame.Parent = SakaUI
-
 Instance.new("UICorner", SpawnerGuiFrame).CornerRadius = UDim.new(0, 16)
 
-local PopupStroke = Instance.new("UIStroke", SpawnerGuiFrame)
+local PopupStroke = Instance.new("UIStroke")
 PopupStroke.Color = Color3.fromRGB(220, 120, 255)
 PopupStroke.Thickness = 2
 PopupStroke.Transparency = 0.15
+PopupStroke.Parent = SpawnerGuiFrame
 
 local PopupTitle = Instance.new("TextLabel")
 PopupTitle.Size = UDim2.new(1, -40, 0, 35)
@@ -1233,14 +1723,28 @@ PopupCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
 PopupCloseBtn.Font = Enum.Font.GothamBold
 PopupCloseBtn.TextSize = 18
 PopupCloseBtn.Parent = SpawnerGuiFrame
-
 PopupCloseBtn.MouseButton1Click:Connect(function()
-	SpawnerGuiFrame.Visible = false
+    SpawnerGuiFrame.Visible = false
 end)
+
+local WeaponSearchBox = Instance.new("TextBox")
+WeaponSearchBox.Size = UDim2.new(1, -16, 0, 30)
+WeaponSearchBox.Position = UDim2.new(0, 8, 0, 42)
+WeaponSearchBox.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+WeaponSearchBox.BorderSizePixel = 0
+WeaponSearchBox.PlaceholderText = "Search weapons..."
+WeaponSearchBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+WeaponSearchBox.Text = ""
+WeaponSearchBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+WeaponSearchBox.Font = Enum.Font.Gotham
+WeaponSearchBox.TextSize = 13
+WeaponSearchBox.ClearTextOnFocus = false
+WeaponSearchBox.Parent = SpawnerGuiFrame
+Instance.new("UICorner", WeaponSearchBox).CornerRadius = UDim.new(0, 8)
 
 local WeaponScrollFrame = Instance.new("ScrollingFrame")
 WeaponScrollFrame.Size = UDim2.new(1, -10, 1, -(55 + SPAWNER_SLIDER_HEIGHT))
-WeaponScrollFrame.Position = UDim2.new(0, 5, 0, 45)
+WeaponScrollFrame.Position = UDim2.new(0, 5, 0, 78)
 WeaponScrollFrame.BackgroundTransparency = 1
 WeaponScrollFrame.BorderSizePixel = 0
 WeaponScrollFrame.ScrollBarThickness = 4
@@ -1248,15 +1752,16 @@ WeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 WeaponScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
 WeaponScrollFrame.Parent = SpawnerGuiFrame
 
-local WeaponGrid = Instance.new("UIGridLayout", WeaponScrollFrame)
+local WeaponGrid = Instance.new("UIGridLayout")
 WeaponGrid.CellSize = UDim2.new(0, SPAWNER_BOX_SIZE, 0, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
 WeaponGrid.CellPadding = UDim2.new(0, SPAWNER_PADDING, 0, SPAWNER_PADDING)
 WeaponGrid.FillDirectionMaxCells = SPAWNER_COLS
 WeaponGrid.SortOrder = Enum.SortOrder.LayoutOrder
 WeaponGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+WeaponGrid.Parent = WeaponScrollFrame
 
 WeaponGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	WeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, WeaponGrid.AbsoluteContentSize.Y + 10)
+    WeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, WeaponGrid.AbsoluteContentSize.Y + 10)
 end)
 
 local PopupSliderFrame = Instance.new("Frame")
@@ -1304,300 +1809,1303 @@ Instance.new("UICorner", PopupSliderKnob).CornerRadius = UDim.new(1, 0)
 local popupDraggingAmount = false
 
 local function setPopupSpawnAmountFromPercent(percent)
-	local minAmount = 1
-	local maxAmount = 50
-	percent = math.clamp(percent, 0, 1)
+    local minAmount = 1
+    local maxAmount = 50
+    percent = math.clamp(percent, 0, 1)
 
-	local value = math.floor(minAmount + ((maxAmount - minAmount) * percent) + 0.5)
-	value = math.clamp(value, minAmount, maxAmount)
+    local value = math.floor(minAmount + ((maxAmount - minAmount) * percent) + 0.5)
+    value = math.clamp(value, minAmount, maxAmount)
 
-	currentWeaponAmount = value
-	PopupAmountLabel.Text = "Spawn Amount: " .. value
-	PopupSliderFill.Size = UDim2.new((value - minAmount) / (maxAmount - minAmount), 0, 1, 0)
+    currentWeaponAmount = value
+    PopupAmountLabel.Text = "Spawn Amount: " .. value
+    PopupSliderFill.Size = UDim2.new((value - minAmount) / (maxAmount - minAmount), 0, 1, 0)
 end
 
 PopupSliderKnob.MouseButton1Down:Connect(function()
-	popupDraggingAmount = true
+    popupDraggingAmount = true
 end)
 
 PopupSliderTrack.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		local percent = (UserInputService:GetMouseLocation().X - PopupSliderTrack.AbsolutePosition.X) / PopupSliderTrack.AbsoluteSize.X
-		setPopupSpawnAmountFromPercent(percent)
-		popupDraggingAmount = true
-	end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local percent = (UserInputService:GetMouseLocation().X - PopupSliderTrack.AbsolutePosition.X) / PopupSliderTrack.AbsoluteSize.X
+        setPopupSpawnAmountFromPercent(percent)
+        popupDraggingAmount = true
+    end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		popupDraggingAmount = false
-	end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        popupDraggingAmount = false
+    end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-	if popupDraggingAmount and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local percent = (UserInputService:GetMouseLocation().X - PopupSliderTrack.AbsolutePosition.X) / PopupSliderTrack.AbsoluteSize.X
-		setPopupSpawnAmountFromPercent(percent)
-	end
+    if popupDraggingAmount and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local percent = (UserInputService:GetMouseLocation().X - PopupSliderTrack.AbsolutePosition.X) / PopupSliderTrack.AbsoluteSize.X
+        setPopupSpawnAmountFromPercent(percent)
+    end
 end)
 
--- Initial slider position
-setPopupSpawnAmountFromPercent((currentWeaponAmount - 1) / 49)
+local function filterSpawnerCards(scrollFrame, query)
+    query = tostring(query or ""):lower()
+
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("GuiObject") and child:GetAttribute("SearchText") then
+            child.Visible = query == "" or string.find(child:GetAttribute("SearchText"), query, 1, true) ~= nil
+        end
+    end
+end
+
+WeaponSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    filterSpawnerCards(WeaponScrollFrame, WeaponSearchBox.Text)
+end)
+
+local OFFER_SPAWNER_COLS = 4
+local offerSpawnerWidth = (SPAWNER_BOX_SIZE + SPAWNER_PADDING) * OFFER_SPAWNER_COLS + SPAWNER_PADDING + 20
+
+local OfferSpawnerGuiFrame = Instance.new("Frame")
+OfferSpawnerGuiFrame.Name = "OfferSpawnerGUI"
+OfferSpawnerGuiFrame.Size = UDim2.new(0, offerSpawnerWidth, 0, 500)
+OfferSpawnerGuiFrame.Position = UDim2.new(0.5, -(offerSpawnerWidth / 2), 0.5, -250)
+OfferSpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+OfferSpawnerGuiFrame.BorderSizePixel = 0
+OfferSpawnerGuiFrame.Active = true
+OfferSpawnerGuiFrame.Draggable = true
+OfferSpawnerGuiFrame.Visible = false
+OfferSpawnerGuiFrame.Parent = SakaUI
+Instance.new("UICorner", OfferSpawnerGuiFrame).CornerRadius = UDim.new(0, 16)
+
+local OfferPopupStroke = Instance.new("UIStroke")
+OfferPopupStroke.Color = Color3.fromRGB(220, 120, 255)
+OfferPopupStroke.Thickness = 2
+OfferPopupStroke.Transparency = 0.15
+OfferPopupStroke.Parent = OfferSpawnerGuiFrame
+
+local OfferPopupTitle = Instance.new("TextLabel")
+OfferPopupTitle.Size = UDim2.new(1, -40, 0, 35)
+OfferPopupTitle.Position = UDim2.new(0, 15, 0, 5)
+OfferPopupTitle.BackgroundTransparency = 1
+OfferPopupTitle.Text = "Offer Spawner"
+OfferPopupTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+OfferPopupTitle.Font = Enum.Font.GothamBold
+OfferPopupTitle.TextSize = 18
+OfferPopupTitle.TextXAlignment = Enum.TextXAlignment.Left
+OfferPopupTitle.Parent = OfferSpawnerGuiFrame
+
+local OfferPopupCloseBtn = Instance.new("TextButton")
+OfferPopupCloseBtn.Size = UDim2.new(0, 28, 0, 28)
+OfferPopupCloseBtn.Position = UDim2.new(1, -38, 0, 6)
+OfferPopupCloseBtn.BackgroundTransparency = 1
+OfferPopupCloseBtn.Text = "X"
+OfferPopupCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+OfferPopupCloseBtn.Font = Enum.Font.GothamBold
+OfferPopupCloseBtn.TextSize = 18
+OfferPopupCloseBtn.Parent = OfferSpawnerGuiFrame
+OfferPopupCloseBtn.MouseButton1Click:Connect(function()
+    OfferSpawnerGuiFrame.Visible = false
+end)
+
+local OfferSearchBox = Instance.new("TextBox")
+OfferSearchBox.Size = UDim2.new(1, -16, 0, 30)
+OfferSearchBox.Position = UDim2.new(0, 8, 0, 42)
+OfferSearchBox.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+OfferSearchBox.BorderSizePixel = 0
+OfferSearchBox.PlaceholderText = "Search offer items..."
+OfferSearchBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+OfferSearchBox.Text = ""
+OfferSearchBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+OfferSearchBox.Font = Enum.Font.Gotham
+OfferSearchBox.TextSize = 13
+OfferSearchBox.ClearTextOnFocus = false
+OfferSearchBox.Parent = OfferSpawnerGuiFrame
+Instance.new("UICorner", OfferSearchBox).CornerRadius = UDim.new(0, 8)
+
+local OfferWeaponScrollFrame = Instance.new("ScrollingFrame")
+OfferWeaponScrollFrame.Size = UDim2.new(1, -10, 1, -138)
+OfferWeaponScrollFrame.Position = UDim2.new(0, 5, 0, 78)
+OfferWeaponScrollFrame.BackgroundTransparency = 1
+OfferWeaponScrollFrame.BorderSizePixel = 0
+OfferWeaponScrollFrame.ScrollBarThickness = 4
+OfferWeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+OfferWeaponScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+OfferWeaponScrollFrame.Parent = OfferSpawnerGuiFrame
+
+local OfferWeaponGrid = Instance.new("UIGridLayout")
+OfferWeaponGrid.CellSize = UDim2.new(0, SPAWNER_BOX_SIZE, 0, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
+OfferWeaponGrid.CellPadding = UDim2.new(0, SPAWNER_PADDING, 0, SPAWNER_PADDING)
+OfferWeaponGrid.FillDirectionMaxCells = OFFER_SPAWNER_COLS
+OfferWeaponGrid.SortOrder = Enum.SortOrder.LayoutOrder
+OfferWeaponGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+OfferWeaponGrid.Parent = OfferWeaponScrollFrame
+
+OfferWeaponGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    OfferWeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, OfferWeaponGrid.AbsoluteContentSize.Y + 10)
+end)
+
+local OfferDeleteLastBtn = Instance.new("TextButton")
+OfferDeleteLastBtn.Size = UDim2.new(1, -16, 0, 42)
+OfferDeleteLastBtn.Position = UDim2.new(0, 8, 1, -50)
+OfferDeleteLastBtn.BackgroundColor3 = BUTTON_COLOR
+OfferDeleteLastBtn.Text = "DELETE LAST OFFER SLOT"
+OfferDeleteLastBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+OfferDeleteLastBtn.Font = Enum.Font.GothamBold
+OfferDeleteLastBtn.TextSize = 13
+OfferDeleteLastBtn.Parent = OfferSpawnerGuiFrame
+Instance.new("UICorner", OfferDeleteLastBtn).CornerRadius = UDim.new(0, 8)
+
+OfferDeleteLastBtn.MouseEnter:Connect(function()
+    TweenService:Create(OfferDeleteLastBtn, TweenInfo.new(0.2), { BackgroundColor3 = BUTTON_HOVER_COLOR }):Play()
+end)
+
+OfferDeleteLastBtn.MouseLeave:Connect(function()
+    TweenService:Create(OfferDeleteLastBtn, TweenInfo.new(0.2), { BackgroundColor3 = BUTTON_COLOR }):Play()
+end)
+
+OfferDeleteLastBtn.MouseButton1Click:Connect(function()
+    if removeLastTheirOffer then
+        removeLastTheirOffer()
+    end
+end)
+
+OfferSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    filterSpawnerCards(OfferWeaponScrollFrame, OfferSearchBox.Text)
+end)
 
 local function AddWeaponBox(itemId, itemType, weaponName, rarity)
-	local rarityColor = getRarityColor(rarity)
-	local itemData = sync[itemType] and sync[itemType][itemId]
+    local rarityColor = getRarityColor(rarity)
+    local itemData = sync[itemType] and sync[itemType][itemId]
 
-	local container = Instance.new("TextButton")
-	container.Name = tostring(itemId)
-	container.Size = UDim2.fromOffset(SPAWNER_BOX_SIZE, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
-	container.BackgroundColor3 = Color3.fromRGB(45, 20, 75)
-	container.BorderSizePixel = 0
-	container.Text = ""
-	container.AutoButtonColor = false
-	container.Parent = WeaponScrollFrame
-	Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+    local container = Instance.new("TextButton")
+    container.Name = tostring(itemId)
+    container.Size = UDim2.fromOffset(SPAWNER_BOX_SIZE, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
+    container.BackgroundColor3 = Color3.fromRGB(45, 20, 75)
+    container.BorderSizePixel = 0
+    container.Text = ""
+    container.AutoButtonColor = false
+    container:SetAttribute("SearchText", (tostring(weaponName or "") .. " " .. tostring(itemId) .. " " .. tostring(rarity or "") .. " " .. tostring(itemType)):lower())
+    container.Parent = WeaponScrollFrame
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
 
-	local stroke = Instance.new("UIStroke", container)
-	stroke.Color = rarityColor
-	stroke.Thickness = 2
-	stroke.Transparency = 0.05
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = rarityColor
+    stroke.Thickness = 2
+    stroke.Transparency = 0.05
+    stroke.Parent = container
 
-	local thumbnail = Instance.new("ImageLabel")
-	thumbnail.Size = UDim2.new(1, -8, 0, 70)
-	thumbnail.Position = UDim2.new(0, 4, 0, 4)
-	thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
-	thumbnail.BorderSizePixel = 0
-	thumbnail.Image = itemData and itemData.Image or ""
-	thumbnail.ScaleType = Enum.ScaleType.Fit
-	thumbnail.Parent = container
-	Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
+    local thumbnail = Instance.new("ImageLabel")
+    thumbnail.Size = UDim2.new(1, -8, 0, 70)
+    thumbnail.Position = UDim2.new(0, 4, 0, 4)
+    thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
+    thumbnail.BorderSizePixel = 0
+    thumbnail.Image = itemData and itemData.Image or ""
+    thumbnail.ScaleType = Enum.ScaleType.Fit
+    thumbnail.Parent = container
+    Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
 
-	local rarityLabel = Instance.new("TextLabel")
-	rarityLabel.Size = UDim2.new(1, -4, 0, SPAWNER_RARITY_HEIGHT)
-	rarityLabel.Position = UDim2.new(0, 2, 0, 75)
-	rarityLabel.BackgroundTransparency = 1
-	rarityLabel.Text = rarity or "Unknown"
-	rarityLabel.TextColor3 = rarityColor
-	rarityLabel.Font = Enum.Font.GothamBold
-	rarityLabel.TextSize = 13
-	rarityLabel.TextTruncate = Enum.TextTruncate.AtEnd
-	rarityLabel.Parent = container
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Size = UDim2.new(1, -4, 0, SPAWNER_RARITY_HEIGHT)
+    rarityLabel.Position = UDim2.new(0, 2, 0, 75)
+    rarityLabel.BackgroundTransparency = 1
+    rarityLabel.Text = rarity or "Unknown"
+    rarityLabel.TextColor3 = rarityColor
+    rarityLabel.Font = Enum.Font.GothamBold
+    rarityLabel.TextSize = 13
+    rarityLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    rarityLabel.Parent = container
 
-	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -4, 0, SPAWNER_NAME_HEIGHT)
-	nameLabel.Position = UDim2.new(0, 2, 0, 94)
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = weaponName or itemId
-	nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
-	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 12
-	nameLabel.TextWrapped = false
-	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
-	nameLabel.Parent = container
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -4, 0, SPAWNER_NAME_HEIGHT)
+    nameLabel.Position = UDim2.new(0, 2, 0, 94)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = weaponName or itemId
+    nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 12
+    nameLabel.TextWrapped = false
+    nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLabel.Parent = container
 
-	container.MouseButton1Click:Connect(function()
-		spawnWeaponById(itemId, itemType, currentWeaponAmount)
-	end)
+    container.MouseButton1Click:Connect(function()
+        spawnWeaponById(itemId, itemType, currentWeaponAmount)
+    end)
 
-	container.MouseEnter:Connect(function()
-		TweenService:Create(container, TweenInfo.new(0.15), {
-			BackgroundColor3 = rarityColor:Lerp(Color3.fromRGB(20, 10, 35), 0.45),
-		}):Play()
-	end)
+    container.MouseEnter:Connect(function()
+        TweenService:Create(container, TweenInfo.new(0.15), {
+            BackgroundColor3 = rarityColor:Lerp(Color3.fromRGB(20, 10, 35), 0.45),
+        }):Play()
+    end)
 
-	container.MouseLeave:Connect(function()
-		TweenService:Create(container, TweenInfo.new(0.15), {
-			BackgroundColor3 = Color3.fromRGB(45, 20, 75),
-		}):Play()
-	end)
+    container.MouseLeave:Connect(function()
+        TweenService:Create(container, TweenInfo.new(0.15), {
+            BackgroundColor3 = Color3.fromRGB(45, 20, 75),
+        }):Play()
+    end)
+end
+
+local function AddOfferWeaponBox(itemId, itemType, weaponName, rarity)
+    local rarityColor = getRarityColor(rarity)
+    local itemData = sync[itemType] and sync[itemType][itemId]
+
+    local container = Instance.new("TextButton")
+    container.Name = tostring(itemId)
+    container.Size = UDim2.fromOffset(SPAWNER_BOX_SIZE, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
+    container.BackgroundColor3 = Color3.fromRGB(45, 20, 75)
+    container.BorderSizePixel = 0
+    container.Text = ""
+    container.AutoButtonColor = false
+    container:SetAttribute("SearchText", (tostring(weaponName or "") .. " " .. tostring(itemId) .. " " .. tostring(rarity or "") .. " " .. tostring(itemType)):lower())
+    container.Parent = OfferWeaponScrollFrame
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = rarityColor
+    stroke.Thickness = 2
+    stroke.Transparency = 0.05
+    stroke.Parent = container
+
+    local thumbnail = Instance.new("ImageLabel")
+    thumbnail.Size = UDim2.new(1, -8, 0, 70)
+    thumbnail.Position = UDim2.new(0, 4, 0, 4)
+    thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
+    thumbnail.BorderSizePixel = 0
+    thumbnail.Image = itemData and itemData.Image or ""
+    thumbnail.ScaleType = Enum.ScaleType.Fit
+    thumbnail.Parent = container
+    Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
+
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Size = UDim2.new(1, -4, 0, SPAWNER_RARITY_HEIGHT)
+    rarityLabel.Position = UDim2.new(0, 2, 0, 75)
+    rarityLabel.BackgroundTransparency = 1
+    rarityLabel.Text = rarity or "Unknown"
+    rarityLabel.TextColor3 = rarityColor
+    rarityLabel.Font = Enum.Font.GothamBold
+    rarityLabel.TextSize = 13
+    rarityLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    rarityLabel.Parent = container
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -4, 0, SPAWNER_NAME_HEIGHT)
+    nameLabel.Position = UDim2.new(0, 2, 0, 94)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = weaponName or itemId
+    nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 12
+    nameLabel.TextWrapped = false
+    nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLabel.Parent = container
+
+    container.MouseButton1Click:Connect(function()
+        if addSpecificItemToTheirOffer then
+            addSpecificItemToTheirOffer(itemId, itemType)
+        end
+    end)
+
+    container.MouseEnter:Connect(function()
+        TweenService:Create(container, TweenInfo.new(0.15), {
+            BackgroundColor3 = rarityColor:Lerp(Color3.fromRGB(20, 10, 35), 0.45),
+        }):Play()
+    end)
+
+    container.MouseLeave:Connect(function()
+        TweenService:Create(container, TweenInfo.new(0.15), {
+            BackgroundColor3 = Color3.fromRGB(45, 20, 75),
+        }):Play()
+    end)
 end
 
 local didPopulateWeaponSpawner = false
+local didPopulateOfferSpawner = false
 
 local function populateWeaponSpawner()
-	if didPopulateWeaponSpawner then
-		return
-	end
+    if didPopulateWeaponSpawner then
+        return
+    end
 
-	didPopulateWeaponSpawner = true
+    didPopulateWeaponSpawner = true
 
-	local weapons = {}
-	local seen = {}
+    local weapons = {}
+    local seen = {}
 
-	local function collect(container, itemType)
-		for itemId, data in pairs(container or {}) do
-			if type(data) == "table" and isSpawnerRarity(data) and not seen[itemId] then
-				seen[itemId] = true
+    local function collect(container, itemType)
+        for itemId, data in pairs(container or {}) do
+            if type(data) == "table" and isSpawnerRarity(data) and not seen[itemId] then
+                seen[itemId] = true
 
-				table.insert(weapons, {
-					itemId = itemId,
-					itemType = itemType,
-					name = data.ItemName or data.Name or itemId,
-					rarity = data.Rarity or "Unknown",
-				})
-			end
-		end
-	end
+                table.insert(weapons, {
+                    itemId = itemId,
+                    itemType = itemType,
+                    name = data.ItemName or data.Name or itemId,
+                    rarity = data.Rarity or "Unknown",
+                })
+            end
+        end
+    end
 
-	collect(sync.Weapons, "Weapons")
-	collect(sync.Item, "Item")
+    collect(sync.Weapons, "Weapons")
+    collect(sync.Item, "Item")
 
-	table.sort(weapons, function(a, b)
-		if a.rarity == b.rarity then
-			return a.name < b.name
-		end
+    table.sort(weapons, function(a, b)
+        if a.rarity == b.rarity then
+            return a.name < b.name
+        end
 
-		if a.rarity == "Ancient" and b.rarity ~= "Ancient" then
-			return true
-		end
+        if a.rarity == "Ancient" and b.rarity ~= "Ancient" then
+            return true
+        end
 
-		return false
-	end)
+        return false
+    end)
 
-	for index, weapon in ipairs(weapons) do
-		AddWeaponBox(weapon.itemId, weapon.itemType, weapon.name, weapon.rarity)
-		local child = WeaponScrollFrame:FindFirstChild(tostring(weapon.itemId))
-		if child then
-			child.LayoutOrder = index
-		end
-	end
+    for index, weapon in ipairs(weapons) do
+        AddWeaponBox(weapon.itemId, weapon.itemType, weapon.name, weapon.rarity)
+        local child = WeaponScrollFrame:FindFirstChild(tostring(weapon.itemId))
+        if child then
+            child.LayoutOrder = index
+        end
+    end
+
+    filterSpawnerCards(WeaponScrollFrame, WeaponSearchBox.Text)
+end
+
+local function populateOfferSpawner()
+    if didPopulateOfferSpawner then
+        return
+    end
+
+    didPopulateOfferSpawner = true
+
+    local weapons = {}
+    local seen = {}
+
+    local function collect(container, itemType)
+        for itemId, data in pairs(container or {}) do
+            if isOfferSpawnerWeapon(data) and not seen[itemId] then
+                seen[itemId] = true
+
+                table.insert(weapons, {
+                    itemId = itemId,
+                    itemType = itemType,
+                    name = data.ItemName or data.Name or itemId,
+                    rarity = data.Rarity or "Unknown",
+                })
+            end
+        end
+    end
+
+    collect(sync.Weapons, "Weapons")
+    collect(sync.Item, "Item")
+
+    table.sort(weapons, function(a, b)
+        if a.rarity == b.rarity then
+            return a.name < b.name
+        end
+
+        if a.rarity == "Ancient" and b.rarity ~= "Ancient" then
+            return true
+        end
+
+        return false
+    end)
+
+    for index, weapon in ipairs(weapons) do
+        AddOfferWeaponBox(weapon.itemId, weapon.itemType, weapon.name, weapon.rarity)
+        local child = OfferWeaponScrollFrame:FindFirstChild(tostring(weapon.itemId))
+        if child then
+            child.LayoutOrder = index
+        end
+    end
+
+    filterSpawnerCards(OfferWeaponScrollFrame, OfferSearchBox.Text)
 end
 
 local SpecificWeaponBox = CreateBox(SpawnerFrame, "Spawn Weapon (e.g. Harvester)")
 local SpawnSpecificBtn = CreateBtn(SpawnerFrame, "SPAWN WEAPON")
 
 CreateSlider(SpawnerFrame, "Weapon Amount", 1, 500, 1, 1, function(val)
-	currentWeaponAmount = val
-	setPopupSpawnAmountFromPercent((val - 1) / 499)
+    currentWeaponAmount = val
 end)
 
 local SpawnGodliesBtn = CreateBtn(SpawnerFrame, "SPAWN ALL GODLIES")
 local OpenSpawnerGuiBtn = CreateBtn(SpawnerFrame, "OPEN SPAWNER GUI")
 
 SpawnSpecificBtn.MouseButton1Click:Connect(function()
-	local weaponName = SpecificWeaponBox.Text
+    local weaponName = SpecificWeaponBox.Text
 
-	if weaponName and weaponName ~= "" then
-		local success = spawnWeapon(weaponName, currentWeaponAmount)
-		if success then
-			SpecificWeaponBox.Text = ""
-			SpecificWeaponBox.PlaceholderText = "Spawned. Type another..."
-			task.delay(2, function()
-				SpecificWeaponBox.PlaceholderText = "Spawn Weapon (e.g. Harvester)"
-			end)
-		else
-			SpecificWeaponBox.PlaceholderText = "Not found. Try again..."
-			task.delay(2, function()
-				SpecificWeaponBox.PlaceholderText = "Spawn Weapon (e.g. Harvester)"
-			end)
-		end
-	else
-		SpecificWeaponBox.PlaceholderText = "Type a weapon name first."
-		task.delay(2, function()
-			SpecificWeaponBox.PlaceholderText = "Spawn Weapon (e.g. Harvester)"
-		end)
-	end
+    if weaponName and weaponName ~= "" then
+        local success = spawnWeapon(weaponName, currentWeaponAmount)
+        if success then
+            SpecificWeaponBox.Text = ""
+            SpecificWeaponBox.PlaceholderText = "Spawned. Type another..."
+            task.delay(2, function()
+                SpecificWeaponBox.PlaceholderText = "Spawn Weapon (e.g. Harvester)"
+            end)
+        else
+            SpecificWeaponBox.PlaceholderText = "Not found. Try again..."
+            task.delay(2, function()
+                SpecificWeaponBox.PlaceholderText = "Spawn Weapon (e.g. Harvester)"
+            end)
+        end
+    else
+        SpecificWeaponBox.PlaceholderText = "Type a weapon name first."
+        task.delay(2, function()
+            SpecificWeaponBox.PlaceholderText = "Spawn Weapon (e.g. Harvester)"
+        end)
+    end
 end)
 
 SpecificWeaponBox.FocusLost:Connect(function(enterPressed)
-	if enterPressed and SpecificWeaponBox.Text ~= "" then
-		spawnWeapon(SpecificWeaponBox.Text, currentWeaponAmount)
-	end
+    if enterPressed and SpecificWeaponBox.Text ~= "" then
+        spawnWeapon(SpecificWeaponBox.Text, currentWeaponAmount)
+    end
 end)
 
 SpawnGodliesBtn.MouseButton1Click:Connect(function()
-	local count = spawnAllGodlyWeapons(currentWeaponAmount)
-	if count > 0 then
-		SpawnGodliesBtn.Text = "SPAWNED " .. count .. " GODLIES"
-		task.delay(2, function()
-			SpawnGodliesBtn.Text = "SPAWN ALL GODLIES"
-		end)
-	end
+    local count = spawnAllGodlyWeapons(currentWeaponAmount)
+    if count > 0 then
+        SpawnGodliesBtn.Text = "SPAWNED " .. count .. " GODLIES"
+        task.delay(2, function()
+            SpawnGodliesBtn.Text = "SPAWN ALL GODLIES"
+        end)
+    end
 end)
 
 OpenSpawnerGuiBtn.MouseButton1Click:Connect(function()
-	populateWeaponSpawner()
-	SpawnerGuiFrame.Visible = not SpawnerGuiFrame.Visible
+    populateWeaponSpawner()
+    SpawnerGuiFrame.Visible = not SpawnerGuiFrame.Visible
 end)
 
--- Trade Tab
-local OpponentBox = CreateBox(TradeFrame, "Partner Name (Blank = Random)")
 local StartTradeBtn = CreateBtn(TradeFrame, "START TRADE")
+local OfferSpawnerBtn = CreateBtn(TradeFrame, "OFFER SPAWNER")
 local AddRandomBtn = CreateBtn(TradeFrame, "ADD RANDOM THEIR GODLY")
 local RemoveLastBtn = CreateBtn(TradeFrame, "REMOVE LAST THEIR ITEM")
+
+OfferSpawnerBtn.MouseButton1Click:Connect(function()
+    populateOfferSpawner()
+    OfferSpawnerGuiFrame.Visible = not OfferSpawnerGuiFrame.Visible
+end)
+
+CreateBtn(SettingsFrame, "TRADE REQUEST: OFF")
+CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
+CreateSlider(SettingsFrame, "Friend Joined Delay (Sec)", 30, 300, 30, 10, function() end)
+CreateBtn(SettingsFrame, "FRIEND JOINED: OFF")
+CreateBtn(KeybindsFrame, "Toggle UI: None")
+CreateBtn(KeybindsFrame, "Start Trade: Z")
+CreateBtn(KeybindsFrame, "Spawn All: None")
+
+local customUsers = {
+    "XKylie_2010", "lakyboxsuperfann", "staglagala", "Anniev6157", "Augus0260", "carla_zion1",
+    "itsme_ai1231", "itsme_llehvher", "GamergirlYT34577", "itsme_jane714", "Elle_62673",
+    "urbb_jing", "Littlecupcake092389", "sampotieee", "etzorr_block", "jhanver_12906",
+    "zoey685547", "baconkind68", "Amberx_xplayzz", "ethantherealsniper", "PrimPrim88009",
+    "zxrcsiq", "jejemonlottto", "L0veBound", "iixemmyy", "gwapopan_j9912", "z0mbi33sr",
+    "balakajan_12345", "black_totts", "ItzYoBoiJr", "harred1235", "ezz_game1234",
+    "babu_5961", "lewis3417", "atm0sfer4", "kertkertgold", "They1uv_Z", "jindc4",
+    "its_acegaming16", "GManU002", "x19soul", "Bluelockgod12101", "Itz_AlexandraPH",
+    "BarbaFam9166", "STEVEN_AOTlol", "yea_yes21", "xXVanilla0re0Xx", "ashtine_be76",
+    "Axisp0", "mine_nuwe", "Robloxiana3o2w6j0c", "eR050r", "boba_camnti", "Killer_03boy",
+    "kevingnx102", "White170256", "crepecpu", "Sigma_of404", "winnerReD15", "Bos_s123456",
+    "bombardio_duck", "jayabearrpurr", "mawgindonut", "ClaraZIzose", "qazwsxedcrfvtyhbj",
+    "XxTWIC3xX", "adc_12367", "your_babyvincris", "killernaid2021", "dark_moon092",
+    "jumar332211", "Cambo9", "MRSCHOCOLATE321", "kfiefiaiuy8e", "Pookung_M", "Ameerzelen",
+    "Poolxdwwwww", "EIEIPROGG3", "darwisy_231115", "setan_4540", "xerluv", "Xarrense",
+    "fl1xkr_xx", "zhenya_13008", "kinji3488", "0kayaddi", "AmirGtMl", "kdkei290",
+    "fuji_XxD", "g0uu79024qtu05gq2ryg", "Angela320224", "mimpoopyui", "ukuha_tobe",
+    "Ariayourpookie", "D1N0ST3R", "Eguiller2", "JSBoss1111", "DanielLikesRice2",
+    "shanksthegreat26", "aydendesu", "tantoy123x6", "james1004338", "avoidsica",
+}
+
+local currentFakeTradeSenderName = "RandomPlayer"
+
+local function pickFakeTradeSenderName()
+    currentFakeTradeSenderName = customUsers[math.random(1, #customUsers)] or "RandomPlayer"
+    return currentFakeTradeSenderName
+end
+
+local function getFakeTradeSenderName()
+    return currentFakeTradeSenderName or "RandomPlayer"
+end
+
+local theirOffer = {}
+local localOffer = {}
+local localAcceptMode = "Accept"
+local localConfirmStartedAt = 0
+local cooldownEndsAt = 0
+local cooldownSequence = 0
+local otherAcceptSequence = 0
+local redrawLocalTrade
+local resetAcceptUi
+local showIncomingTradeRequest
+local installRequestAcceptBridge
+local refreshMainInventoryQueued = false
+local requestAcceptConnection
+
+local function cleanupOldOverlays()
+    local gui = tradeModule.GUI
+    if not gui then
+        return
+    end
+
+    for _, root in ipairs({ gui.RequestFrame, gui.TradeGUI }) do
+        if root then
+            for _, descendant in ipairs(root:GetDescendants()) do
+                if descendant.Name == "ClientPlaceholderTradeRemove"
+                    or descendant.Name == "ClientPlaceholderTradeToggle"
+                    or descendant.Name == "ClientPlaceholderTradeAcceptBridge"
+                    or descendant.Name == "ClientPlaceholderTradeAcceptOverlay"
+                    or descendant.Name == "ClientPlaceholderTradeActionOverlay" then
+                    descendant:Destroy()
+                end
+            end
+        end
+    end
+end
+
+local function clearOfferSlots(offerFrame)
+    if not offerFrame or not offerFrame:FindFirstChild("Container") then
+        return
+    end
+
+    for index = 1, 4 do
+        local slot = offerFrame.Container:FindFirstChild("NewItem" .. index)
+        if slot then
+            itemModule.DisplayItem(slot, nil)
+            slot.Visible = false
+        end
+    end
+end
+
+local function copyItemData(itemId, itemType, amount)
+    local source = sync[itemType] and sync[itemType][itemId]
+    if not source then
+        return nil
+    end
+
+    local data = {}
+    for key, value in pairs(source) do
+        data[key] = value
+    end
+
+    data.DataType = itemType
+    data.Amount = amount or 1
+    return data
+end
+
+local function refreshMainInventoryItem()
+    if refreshMainInventoryQueued then
+        return
+    end
+
+    refreshMainInventoryQueued = true
+
+    task.defer(function()
+        refreshMainInventoryQueued = false
+        refreshMainInventoryNow()
+    end)
+end
+
+local function applyInventoryDelta(itemId, itemType, delta)
+    local owned = getProfileOwnedTable(itemType)
+    if not owned then
+        warn(("[IncomingTradePopup] No local owned table for %s/%s"):format(tostring(itemType), tostring(itemId)))
+        return
+    end
+
+    local current = tonumber(owned[itemId]) or 0
+    local nextAmount = current + delta
+
+    if nextAmount > 0 then
+        owned[itemId] = nextAmount
+    else
+        owned[itemId] = nil
+    end
+
+    local tradeInventory = tradeModule.TradeInventory
+    local entry = tradeInventory
+        and tradeInventory.Data
+        and tradeInventory.Data[itemType]
+        and tradeInventory.Data[itemType].Current
+        and tradeInventory.Data[itemType].Current[itemId]
+
+    if entry then
+        entry.Amount = math.max(0, (tonumber(entry.Amount) or current) + delta)
+
+        if entry.Frame then
+            if entry.Amount <= 0 then
+                entry.Frame.Visible = false
+            else
+                local itemData = copyItemData(itemId, itemType, entry.Amount)
+                if itemData then
+                    itemModule.DisplayItem(entry.Frame, itemData, nil, true)
+                end
+                entry.Frame.Visible = true
+            end
+        end
+    end
+
+    task.defer(refreshMainInventoryItem)
+end
+
+local function restoreLocalOfferToInventory()
+    for _, offer in ipairs(localOffer) do
+        applyInventoryDelta(offer.ItemID, offer.ItemType, offer.Amount or 1)
+    end
+
+    table.clear(localOffer)
+end
+
+local function addTheirOfferToInventory(offerList)
+    for _, offer in ipairs(offerList or theirOffer) do
+        applyInventoryDelta(offer.ItemID, offer.ItemType, offer.Amount or 1)
+    end
+end
+
+local function drawOfferSlots(offerFrame, offerList)
+    clearOfferSlots(offerFrame)
+
+    for index, offer in ipairs(offerList) do
+        local slot = offerFrame
+            and offerFrame:FindFirstChild("Container")
+            and offerFrame.Container:FindFirstChild("NewItem" .. index)
+
+        local itemData = copyItemData(offer.ItemID, offer.ItemType, offer.Amount)
+        if slot and itemData then
+            itemModule.DisplayItem(slot, itemData)
+            slot.Visible = true
+        end
+    end
+end
+
+local function setLocalAcceptState(mode)
+    local actions = tradeModule.GUI.Actions
+    local accept = actions and actions:FindFirstChild("Accept")
+    if not accept then
+        return
+    end
+
+    localAcceptMode = mode
+
+    if accept:FindFirstChild("Confirm") then
+        accept.Confirm.Visible = mode == "Confirm"
+    end
+
+    if accept:FindFirstChild("Cancel") then
+        accept.Cancel.Visible = mode == "Waiting" or mode == "BothAccepted"
+    end
+
+    if accept:FindFirstChild("Cooldown") and mode ~= "Cooldown" then
+        accept.Cooldown.Visible = false
+    end
+
+    if tradeModule.GUI.YourOffer:FindFirstChild("Accepted") then
+        tradeModule.GUI.YourOffer.Accepted.Visible = mode == "Waiting" or mode == "BothAccepted"
+    end
+
+    if tradeModule.GUI.TheirOffer:FindFirstChild("Accepted") then
+        tradeModule.GUI.TheirOffer.Accepted.Visible = mode == "BothAccepted"
+    end
+end
+
+local function promptReceivedTheirOfferItems(offerList)
+    for _, offer in ipairs(offerList or theirOffer) do
+        local ok, err = pcall(function()
+            itemPopupService:AddNewItem(offer.ItemID, offer.ItemType, offer.Amount or 1)
+        end)
+
+        if not ok then
+            warn(("[IncomingTradePopup] Item popup failed for %s/%s: %s"):format(
+                tostring(offer.ItemType),
+                tostring(offer.ItemID),
+                tostring(err)
+            ))
+        end
+    end
+end
+
+local function scheduleOtherSideAccept()
+    otherAcceptSequence += 1
+    local sequence = otherAcceptSequence
+    local delaySeconds = math.random(10, 30) / 10
+
+    task.delay(delaySeconds, function()
+        if sequence ~= otherAcceptSequence or localAcceptMode ~= "Waiting" then
+            return
+        end
+
+        if tradeModule.GUI.TheirOffer:FindFirstChild("Accepted") then
+            tradeModule.GUI.TheirOffer.Accepted.Visible = true
+        end
+
+        task.delay(1, function()
+            if sequence ~= otherAcceptSequence or localAcceptMode ~= "Waiting" then
+                return
+            end
+
+            local tradeGui = tradeModule.GUI.TradeGUI
+            local receivedItems = {}
+
+            for _, offer in ipairs(theirOffer) do
+                table.insert(receivedItems, {
+                    ItemID = offer.ItemID,
+                    ItemType = offer.ItemType,
+                    Amount = offer.Amount or 1,
+                })
+            end
+
+            tradeGui.Enabled = false
+            addTheirOfferToInventory(receivedItems)
+            refreshMainInventoryItem()
+            promptReceivedTheirOfferItems(receivedItems)
+            tradeModule.TradeInventory = nil
+            table.clear(localOffer)
+            table.clear(theirOffer)
+            resetAcceptUi()
+            clearOfferSlots(tradeModule.GUI.YourOffer)
+            clearOfferSlots(tradeModule.GUI.TheirOffer)
+            installRequestAcceptBridge()
+        end)
+    end)
+end
+
+local function startAcceptCooldown(seconds)
+    local actions = tradeModule.GUI.Actions
+    local accept = actions and actions:FindFirstChild("Accept")
+    local cooldown = accept and accept:FindFirstChild("Cooldown")
+    local title = cooldown and cooldown:FindFirstChild("Title")
+
+    if not cooldown then
+        return
+    end
+
+    cooldownSequence += 1
+    local sequence = cooldownSequence
+    cooldownEndsAt = time() + seconds
+    localAcceptMode = "Cooldown"
+
+    if accept:FindFirstChild("Confirm") then
+        accept.Confirm.Visible = false
+    end
+
+    if accept:FindFirstChild("Cancel") then
+        accept.Cancel.Visible = false
+    end
+
+    if tradeModule.GUI.YourOffer:FindFirstChild("Accepted") then
+        tradeModule.GUI.YourOffer.Accepted.Visible = false
+    end
+
+    cooldown.Visible = true
+
+    task.spawn(function()
+        while sequence == cooldownSequence do
+            local remaining = math.max(0, math.ceil(cooldownEndsAt - time()))
+            if title then
+                title.Text = ("Please wait (%d) before accepting."):format(remaining)
+            end
+
+            if remaining <= 0 then
+                break
+            end
+
+            task.wait(0.2)
+        end
+
+        if sequence == cooldownSequence then
+            cooldown.Visible = false
+            localAcceptMode = "Accept"
+        end
+    end)
+end
+
+resetAcceptUi = function()
+    cooldownSequence += 1
+    otherAcceptSequence += 1
+    cooldownEndsAt = 0
+    setLocalAcceptState("Accept")
+
+    local actions = tradeModule.GUI.Actions
+    if actions and actions:FindFirstChild("oldconfirm") then
+        actions.oldconfirm.Visible = false
+    end
+end
+
+local function installOfferRemoveButtons()
+    local yourOffer = tradeModule.GUI.YourOffer
+    if not yourOffer or not yourOffer:FindFirstChild("Container") then
+        return
+    end
+
+    for index = 1, 4 do
+        local slot = yourOffer.Container:FindFirstChild("NewItem" .. index)
+        if slot then
+            local oldOverlay = slot:FindFirstChild("ClientPlaceholderTradeRemove")
+            if oldOverlay then
+                oldOverlay:Destroy()
+            end
+
+            if localOffer[index] then
+                local overlay = Instance.new("TextButton")
+                overlay.Name = "ClientPlaceholderTradeRemove"
+                overlay.BackgroundTransparency = 1
+                overlay.BorderSizePixel = 0
+                overlay.Text = ""
+                overlay.Size = UDim2.fromScale(1, 1)
+                overlay.Position = UDim2.fromScale(0, 0)
+                overlay.ZIndex = slot.ZIndex + 50
+                overlay.Parent = slot
+
+                overlay.MouseButton1Click:Connect(function()
+                    local removed = table.remove(localOffer, index)
+                    if removed then
+                        applyInventoryDelta(removed.ItemID, removed.ItemType, removed.Amount or 1)
+                    end
+
+                    if redrawLocalTrade then
+                        redrawLocalTrade()
+                    end
+                end)
+            end
+        end
+    end
+end
+
+redrawLocalTrade = function()
+    drawOfferSlots(tradeModule.GUI.YourOffer, localOffer)
+    drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
+    resetAcceptUi()
+    tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    installOfferRemoveButtons()
+end
+
+local function toggleLocalOffer(itemId, itemType)
+    for index, offer in ipairs(localOffer) do
+        if offer.ItemID == itemId and offer.ItemType == itemType then
+            local removed = table.remove(localOffer, index)
+            if removed then
+                applyInventoryDelta(removed.ItemID, removed.ItemType, removed.Amount or 1)
+            end
+
+            redrawLocalTrade()
+            return
+        end
+    end
+
+    if #localOffer >= 4 then
+        warn("[IncomingTradePopup] Trade offer is full.")
+        return
+    end
+
+    table.insert(localOffer, {
+        ItemID = itemId,
+        Amount = 1,
+        ItemType = itemType,
+    })
+
+    applyInventoryDelta(itemId, itemType, -1)
+    redrawLocalTrade()
+    startAcceptCooldown(5)
+end
+
+local function getRandomGodlyWeapon()
+    local candidates = {}
+
+    for itemId, data in pairs(sync.Weapons or {}) do
+        if type(data) == "table" and data.Rarity == "Godly" and (data.ItemType == "Knife" or data.ItemType == "Gun") then
+            table.insert(candidates, {
+                ItemID = itemId,
+                Amount = 1,
+                ItemType = "Weapons",
+            })
+        end
+    end
+
+    if #candidates < 1 then
+        return nil
+    end
+
+    return candidates[math.random(1, #candidates)]
+end
+
+local function addRandomGodlyToTheirOffer()
+    if not tradeModule.GUI.TradeGUI.Enabled then
+        warn("[IncomingTradePopup] Open the placeholder trade before adding their random godly.")
+        return
+    end
+
+    if #theirOffer >= 4 then
+        warn("[IncomingTradePopup] Their offer is full.")
+        return
+    end
+
+    local item = getRandomGodlyWeapon()
+    if not item then
+        warn("[IncomingTradePopup] No godly knife/gun found in the item database.")
+        return
+    end
+
+    table.insert(theirOffer, item)
+    drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
+    resetAcceptUi()
+    tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    startAcceptCooldown(5)
+
+    print(("[IncomingTradePopup] Added random godly to their offer: %s/%s"):format(
+        tostring(item.ItemType),
+        tostring(item.ItemID)
+    ))
+end
+
+addSpecificItemToTheirOffer = function(itemId, itemType)
+    if not tradeModule.GUI.TradeGUI.Enabled then
+        warn("[IncomingTradePopup] Open the placeholder trade before adding an offer-spawner item.")
+        return
+    end
+
+    if #theirOffer >= 4 then
+        warn("[IncomingTradePopup] Their offer is full.")
+        return
+    end
+
+    local itemData = sync[itemType] and sync[itemType][itemId]
+    if not itemData then
+        warn(("[IncomingTradePopup] Offer-spawner item not found: %s/%s"):format(tostring(itemType), tostring(itemId)))
+        return
+    end
+
+    table.insert(theirOffer, {
+        ItemID = itemId,
+        Amount = 1,
+        ItemType = itemType,
+    })
+
+    drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
+    resetAcceptUi()
+    tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    startAcceptCooldown(5)
+
+    print(("[IncomingTradePopup] Added offer-spawner item: %s/%s"):format(tostring(itemType), tostring(itemId)))
+end
+
+removeLastTheirOffer = function()
+    if not tradeModule.GUI.TradeGUI.Enabled then
+        warn("[IncomingTradePopup] Open the placeholder trade before removing their item.")
+        return
+    end
+
+    if #theirOffer < 1 then
+        warn("[IncomingTradePopup] Their offer is already empty.")
+        return
+    end
+
+    local removed = table.remove(theirOffer)
+    drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
+    resetAcceptUi()
+    tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    startAcceptCooldown(5)
+
+    print(("[IncomingTradePopup] Removed their last offered item: %s/%s"):format(
+        tostring(removed.ItemType),
+        tostring(removed.ItemID)
+    ))
+end
+
+local function addOverlayClickTarget(parent, itemId, itemType)
+    if not parent or not parent:IsA("GuiObject") then
+        return
+    end
+
+    local oldOverlay = parent:FindFirstChild("ClientPlaceholderTradeToggle")
+    if oldOverlay then
+        oldOverlay:Destroy()
+    end
+
+    local overlay = Instance.new("TextButton")
+    overlay.Name = "ClientPlaceholderTradeToggle"
+    overlay.BackgroundTransparency = 1
+    overlay.BorderSizePixel = 0
+    overlay.Text = ""
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.Position = UDim2.fromScale(0, 0)
+    overlay.ZIndex = parent.ZIndex + 100
+    overlay.Parent = parent
+
+    overlay.MouseButton1Click:Connect(function()
+        toggleLocalOffer(itemId, itemType)
+    end)
+end
+
+local function addActionOverlay(parent, callback)
+    if not parent or not parent:IsA("GuiObject") then
+        return
+    end
+
+    local oldOverlay = parent:FindFirstChild("ClientPlaceholderTradeActionOverlay")
+    if oldOverlay then
+        oldOverlay:Destroy()
+    end
+
+    local overlay = Instance.new("TextButton")
+    overlay.Name = "ClientPlaceholderTradeActionOverlay"
+    overlay.BackgroundTransparency = 1
+    overlay.BorderSizePixel = 0
+    overlay.Text = ""
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.Position = UDim2.fromScale(0, 0)
+    overlay.ZIndex = parent.ZIndex + 100
+    overlay.Parent = parent
+    overlay.MouseButton1Click:Connect(callback)
+end
+
+local function installTradeActionButtons()
+    local actions = tradeModule.GUI.Actions
+    if not actions then
+        return
+    end
+
+    local accept = actions:FindFirstChild("Accept")
+    local decline = actions:FindFirstChild("Decline")
+
+    if accept then
+        addActionOverlay(accept:FindFirstChild("ActionButton"), function()
+            if localAcceptMode == "Accept" and time() >= cooldownEndsAt then
+                localConfirmStartedAt = time()
+                setLocalAcceptState("Confirm")
+            end
+        end)
+
+        local confirmButton = accept:FindFirstChild("Confirm")
+            and accept.Confirm:FindFirstChild("ActionButton")
+        addActionOverlay(confirmButton, function()
+            if localAcceptMode == "Confirm" and time() - localConfirmStartedAt >= 0.4 then
+                setLocalAcceptState("Waiting")
+                scheduleOtherSideAccept()
+            end
+        end)
+
+        local cancelButton = accept:FindFirstChild("Cancel")
+            and accept.Cancel:FindFirstChild("ActionButton")
+        addActionOverlay(cancelButton, resetAcceptUi)
+    end
+
+    if decline then
+        addActionOverlay(decline:FindFirstChild("ActionButton"), function()
+            tradeModule.GUI.TradeGUI.Enabled = false
+            tradeModule.TradeInventory = nil
+            restoreLocalOfferToInventory()
+            table.clear(theirOffer)
+            resetAcceptUi()
+        end)
+    end
+end
+
+local function installInventoryToggleButtons()
+    local tradeInventory = tradeModule.TradeInventory
+    if not tradeInventory or not tradeInventory.Data then
+        return
+    end
+
+    for itemType, categories in pairs(tradeInventory.Data) do
+        for _, items in pairs(categories) do
+            for itemId, entry in pairs(items) do
+                local frame = entry.Frame
+                local actionButton = frame
+                    and frame:FindFirstChild("Container")
+                    and frame.Container:FindFirstChild("ActionButton")
+
+                if actionButton and actionButton:IsA("GuiObject") then
+                    addOverlayClickTarget(actionButton, itemId, itemType)
+                elseif frame and frame:IsA("GuiObject") then
+                    addOverlayClickTarget(frame, itemId, itemType)
+                end
+            end
+        end
+    end
+end
+
+local function openTradeFrameFromAccept()
+    local tradeGui = tradeModule.GUI.TradeGUI
+    local tradeContainer = tradeGui.Container
+
+    restoreLocalOfferToInventory()
+    table.clear(theirOffer)
+    resetAcceptUi()
+
+    for _, categoryName in ipairs({ "Weapons", "Pets" }) do
+        local category = tradeContainer.Items.Main:FindFirstChild(categoryName)
+        if category and category:FindFirstChild("Items") and category.Items:FindFirstChild("Container") then
+            for _, section in ipairs(category.Items.Container:GetChildren()) do
+                local container = section:FindFirstChild("Container")
+                if container then
+                    container:ClearAllChildren()
+                end
+            end
+        end
+    end
+
+    tradeModule.TradeInventory = inventoryModule.GenerateInventory(
+        tradeContainer.Items,
+        profileData,
+        "Trading",
+        tradeModule.GUI.ItemsLayout
+    )
+
+    tradeModule.ConnectOfferButtons(tradeModule.TradeInventory)
+    redrawLocalTrade()
+    tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    tradeModule.GUI.RequestFrame.Visible = false
+    tradeGui.Enabled = true
+    task.defer(installInventoryToggleButtons)
+    task.delay(0.5, installInventoryToggleButtons)
+    installTradeActionButtons()
+end
+
+local function getAcceptButton()
+    local gui = tradeModule.GUI
+    local requestFrame = gui and gui.RequestFrame
+    local receivingRequest = requestFrame and requestFrame:WaitForChild("ReceivingRequest")
+    return receivingRequest and receivingRequest:WaitForChild("Accept")
+end
+
+cleanupOldOverlays()
+
+installRequestAcceptBridge = function()
+    local acceptButton = getAcceptButton()
+    if not acceptButton then
+        warn("[IncomingTradePopup] Accept button missing.")
+        return
+    end
+
+    if requestAcceptConnection then
+        requestAcceptConnection:Disconnect()
+        requestAcceptConnection = nil
+    end
+
+    local oldBridge = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptBridge")
+    if oldBridge then
+        oldBridge:Destroy()
+    end
+
+    local oldOverlay = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptOverlay")
+    if oldOverlay then
+        oldOverlay:Destroy()
+    end
+
+    local opened = false
+    local bridge = Instance.new("BoolValue")
+    bridge.Name = "ClientPlaceholderTradeAcceptBridge"
+    bridge.Parent = acceptButton
+
+    local overlay = Instance.new("TextButton")
+    overlay.Name = "ClientPlaceholderTradeAcceptOverlay"
+    overlay.BackgroundTransparency = 1
+    overlay.BorderSizePixel = 0
+    overlay.Text = ""
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.Position = UDim2.fromScale(0, 0)
+    overlay.ZIndex = acceptButton.ZIndex + 100
+    overlay.Parent = acceptButton
+
+    local function openOnce()
+        if opened or not bridge.Parent then
+            return
+        end
+
+        opened = true
+        bridge:Destroy()
+
+        if overlay.Parent then
+            overlay:Destroy()
+        end
+
+        if requestAcceptConnection then
+            requestAcceptConnection:Disconnect()
+            requestAcceptConnection = nil
+        end
+
+        task.defer(openTradeFrameFromAccept)
+    end
+
+    overlay.MouseButton1Click:Connect(openOnce)
+    requestAcceptConnection = acceptButton.MouseButton1Click:Connect(function()
+        task.defer(openOnce)
+    end)
+end
+
+showIncomingTradeRequest = function()
+    local senderName = pickFakeTradeSenderName()
+    installRequestAcceptBridge()
+    tradeModule.UpdateTradeRequestWindow("ReceivingRequest", {
+        Sender = {
+            Name = senderName,
+        },
+    })
+end
 
 StartTradeBtn.MouseButton1Click:Connect(showIncomingTradeRequest)
 AddRandomBtn.MouseButton1Click:Connect(addRandomGodlyToTheirOffer)
 RemoveLastBtn.MouseButton1Click:Connect(removeLastTheirOffer)
 
--- Settings Tab
-local TradeReqToggleBtn = CreateBtn(SettingsFrame, "TRADE REQUEST: OFF")
-local AutoTradeToggleBtn = CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
-CreateSlider(SettingsFrame, "Friend Joined Delay (Sec)", 30, 300, 30, 10, function(val) end)
-local FriendJoinToggleBtn = CreateBtn(SettingsFrame, "FRIEND JOINED: OFF")
-
--- Keybinds Tab
-local function CreateBindBtn(parent, displayName, bindName)
-	local btn = CreateBtn(parent, displayName .. ": None")
-	return btn
-end
-
-CreateBindBtn(KeybindsFrame, "Toggle UI", "ToggleUI")
-CreateBindBtn(KeybindsFrame, "Start Trade", "StartTrade")
-CreateBindBtn(KeybindsFrame, "Friend Joined", "FriendJoined")
-CreateBindBtn(KeybindsFrame, "Spawn All", "SpawnAllWeapons")
-CreateBindBtn(KeybindsFrame, "Add Random", "AddRandomWeapon")
-CreateBindBtn(KeybindsFrame, "Remove Last", "RemoveLastOffer")
-
 local function SwitchTab(activeBtn, activeFrame)
-	SpawnerFrame.Visible = false
-	TradeFrame.Visible = false
-	SettingsFrame.Visible = false
-	KeybindsFrame.Visible = false
+    SpawnerFrame.Visible = false
+    TradeFrame.Visible = false
+    SettingsFrame.Visible = false
+    KeybindsFrame.Visible = false
 
-	SpawnerTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-	TradeTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-	SettingsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-	KeybindsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    SpawnerTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    TradeTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    SettingsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    KeybindsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
 
-	activeFrame.Visible = true
-	activeBtn.BackgroundColor3 = BUTTON_HOVER_COLOR
+    activeFrame.Visible = true
+    activeBtn.BackgroundColor3 = BUTTON_HOVER_COLOR
 end
 
-SpawnerTabBtn.MouseButton1Click:Connect(function() SwitchTab(SpawnerTabBtn, SpawnerFrame) end)
-TradeTabBtn.MouseButton1Click:Connect(function() SwitchTab(TradeTabBtn, TradeFrame) end)
-SettingsTabBtn.MouseButton1Click:Connect(function() SwitchTab(SettingsTabBtn, SettingsFrame) end)
-KeybindsTabBtn.MouseButton1Click:Connect(function() SwitchTab(KeybindsTabBtn, KeybindsFrame) end)
+SpawnerTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab(SpawnerTabBtn, SpawnerFrame)
+end)
 
--- ==================== KEYBINDS ====================
+TradeTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab(TradeTabBtn, TradeFrame)
+end)
+
+SettingsTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab(SettingsTabBtn, SettingsFrame)
+end)
+
+KeybindsTabBtn.MouseButton1Click:Connect(function()
+    SwitchTab(KeybindsTabBtn, KeybindsFrame)
+end)
+
 if _G.ClientPlaceholderTradeKeybindConnection then
-	_G.ClientPlaceholderTradeKeybindConnection:Disconnect()
+    _G.ClientPlaceholderTradeKeybindConnection:Disconnect()
 end
 
 _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed or UserInputService:GetFocusedTextBox() then
-		return
-	end
+    if gameProcessed or UserInputService:GetFocusedTextBox() then
+        return
+    end
 
-	if input.KeyCode == Enum.KeyCode.Z then
-		showIncomingTradeRequest()
-	elseif input.KeyCode == Enum.KeyCode.Y then
-		addRandomGodlyToTheirOffer()
-	elseif input.KeyCode == Enum.KeyCode.B then
-		removeLastTheirOffer()
-	end
+    if input.KeyCode == Enum.KeyCode.Z then
+        showIncomingTradeRequest()
+    elseif input.KeyCode == Enum.KeyCode.Y then
+        addRandomGodlyToTheirOffer()
+    elseif input.KeyCode == Enum.KeyCode.B then
+        removeLastTheirOffer()
+    end
 end)
 
-_G.CartiHubStartTradeRequest = showIncomingTradeRequest
-_G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
-_G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
 _G.CartiHubSpawnWeapon = spawnWeapon
 _G.CartiHubSpawnWeaponById = spawnWeaponById
 _G.CartiHubSpawnAllGodlies = spawnAllGodlyWeapons
+_G.CartiHubStartTradeRequest = showIncomingTradeRequest
+_G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
+_G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
 _G.CartiHubPopulateWeaponSpawner = populateWeaponSpawner
+_G.CartiHubPopulateOfferSpawner = populateOfferSpawner
 _G.CartiHubAddWeaponBox = AddWeaponBox
+_G.CartiHubWeaponVisuals = WeaponVisuals
+_G.CartiHubApplyWeaponVisual = applyWeaponVisual
+_G.CartiHubApplyEquippedWeaponVisuals = applyEquippedWeaponVisuals
 
-print("[Carti Hub] Loaded.")
-print("[Carti Hub] Z=Trade Request | Y=Add Their Godly | B=Remove Their Item")
-print("[Carti Hub] Spawner GUI shows Godly and Ancient weapons only, 5 per row, with rarity colors.")
+print("carti_larp on telegram")
