@@ -862,7 +862,33 @@ local WeaponVisuals = {
     ChromaTexture = "",
     ChromaStaticLayer = "",
 },
+["Evergun"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://15408863676",
+    TextureId = "rbxassetid://15408849730",
+    Scale = Vector3.new(0.019999999552965164, 0.019999999552965164, 0.019999999552965164),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    SurfaceColorMap = "",
+    SurfaceMetalnessMap = "",
+    SurfaceNormalMap = "",
+    SurfaceRoughnessMap = "",
+    SurfaceAlphaMode = Enum.AlphaMode.Overlay,
+    AttachmentPosition = Vector3.new(0, -0.20000000298023224, 0.08990859985351562),
+    AttachmentOrientation = Vector3.new(-50.001827239990234, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.6427633166313171, -0.7660649418830872),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+    ChromaFace = Enum.NormalId.Back,
+},
 }
+
 local function getPlacementAttachment(character, placement)
     if placement == "Back" then
         return character:FindFirstChild("UpperTorso")
@@ -2449,6 +2475,12 @@ local function refreshMainInventoryItem()
     end)
 end
 
+local function isTradeGuiOpen()
+    return tradeModule.GUI
+        and tradeModule.GUI.TradeGUI
+        and tradeModule.GUI.TradeGUI.Enabled
+end
+
 local function applyInventoryDelta(itemId, itemType, delta)
     local owned = getProfileOwnedTable(itemType)
     if not owned then
@@ -2488,7 +2520,9 @@ local function applyInventoryDelta(itemId, itemType, delta)
         end
     end
 
-    task.defer(refreshMainInventoryItem)
+    if not isTradeGuiOpen() then
+        task.defer(refreshMainInventoryItem)
+    end
 end
 
 local function restoreLocalOfferToInventory()
