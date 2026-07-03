@@ -1397,6 +1397,33 @@ local function spawnWeaponById(itemId, itemType, amount)
     return true
 end
 
+local function spawnWeaponByIdNoPopup(itemId, itemType, amount)
+    local itemData = sync[itemType] and sync[itemType][itemId]
+
+    if not itemData then
+        warn(("[Carti Hub] Weapon id not found: %s/%s"):format(tostring(itemType), tostring(itemId)))
+        return false
+    end
+
+    amount = tonumber(amount) or 1
+    amount = math.max(1, amount)
+
+    local owned = getProfileOwnedTable(itemType)
+    if not owned then
+        warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
+        return false
+    end
+
+    local current = tonumber(owned[itemId]) or 0
+    owned[itemId] = current + amount
+
+    refreshMainInventoryNow()
+
+    local displayName = itemData.ItemName or itemData.Name or itemId
+    print(("[Carti Hub] Spawned %dx %s without popup (%s/%s)"):format(amount, displayName, itemType, itemId))
+    return true
+end
+
 local function normalizeItemText(value)
     return tostring(value or ""):lower():gsub("[^%w%?]", "")
 end
@@ -1678,7 +1705,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 50)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "t.me/cartiscripts"
+Title.Text = "Carti Hub"
 Title.TextColor3 = Color3.fromRGB(255, 235, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 22
@@ -2165,6 +2192,341 @@ OfferSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
     filterSpawnerCards(OfferWeaponScrollFrame, OfferSearchBox.Text)
 end)
 
+local RealisticSpawnerGuiFrame
+local populateRealisticSpawner
+
+do
+    local selectedRealisticWeapons = {}
+    local didPopulateRealisticSpawner = false
+
+    RealisticSpawnerGuiFrame = Instance.new("Frame")
+    RealisticSpawnerGuiFrame.Name = "RealisticSpawnerGUI"
+    RealisticSpawnerGuiFrame.Size = UDim2.new(0, spawnerWidth, 0, 540)
+    RealisticSpawnerGuiFrame.Position = UDim2.new(0.5, -(spawnerWidth / 2), 0.5, -270)
+    RealisticSpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+    RealisticSpawnerGuiFrame.BorderSizePixel = 0
+    RealisticSpawnerGuiFrame.Active = true
+    RealisticSpawnerGuiFrame.Draggable = true
+    RealisticSpawnerGuiFrame.Visible = false
+    RealisticSpawnerGuiFrame.Parent = SakaUI
+    Instance.new("UICorner", RealisticSpawnerGuiFrame).CornerRadius = UDim.new(0, 16)
+
+    local realisticStroke = Instance.new("UIStroke")
+    realisticStroke.Color = Color3.fromRGB(220, 120, 255)
+    realisticStroke.Thickness = 2
+    realisticStroke.Transparency = 0.15
+    realisticStroke.Parent = RealisticSpawnerGuiFrame
+
+    local realisticTitle = Instance.new("TextLabel")
+    realisticTitle.Size = UDim2.new(1, -40, 0, 35)
+    realisticTitle.Position = UDim2.new(0, 15, 0, 5)
+    realisticTitle.BackgroundTransparency = 1
+    realisticTitle.Text = "Realistic Spawner"
+    realisticTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+    realisticTitle.Font = Enum.Font.GothamBold
+    realisticTitle.TextSize = 18
+    realisticTitle.TextXAlignment = Enum.TextXAlignment.Left
+    realisticTitle.Parent = RealisticSpawnerGuiFrame
+
+    local realisticCloseBtn = Instance.new("TextButton")
+    realisticCloseBtn.Size = UDim2.new(0, 28, 0, 28)
+    realisticCloseBtn.Position = UDim2.new(1, -38, 0, 6)
+    realisticCloseBtn.BackgroundTransparency = 1
+    realisticCloseBtn.Text = "X"
+    realisticCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+    realisticCloseBtn.Font = Enum.Font.GothamBold
+    realisticCloseBtn.TextSize = 18
+    realisticCloseBtn.Parent = RealisticSpawnerGuiFrame
+    realisticCloseBtn.MouseButton1Click:Connect(function()
+        RealisticSpawnerGuiFrame.Visible = false
+    end)
+
+    local realisticSearchBox = Instance.new("TextBox")
+    realisticSearchBox.Size = UDim2.new(1, -16, 0, 30)
+    realisticSearchBox.Position = UDim2.new(0, 8, 0, 42)
+    realisticSearchBox.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+    realisticSearchBox.BorderSizePixel = 0
+    realisticSearchBox.PlaceholderText = "Search weapons..."
+    realisticSearchBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    realisticSearchBox.Text = ""
+    realisticSearchBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    realisticSearchBox.Font = Enum.Font.Gotham
+    realisticSearchBox.TextSize = 13
+    realisticSearchBox.ClearTextOnFocus = false
+    realisticSearchBox.Parent = RealisticSpawnerGuiFrame
+    Instance.new("UICorner", realisticSearchBox).CornerRadius = UDim.new(0, 8)
+
+    local realisticScrollFrame = Instance.new("ScrollingFrame")
+    realisticScrollFrame.Size = UDim2.new(1, -10, 1, -156)
+    realisticScrollFrame.Position = UDim2.new(0, 5, 0, 78)
+    realisticScrollFrame.BackgroundTransparency = 1
+    realisticScrollFrame.BorderSizePixel = 0
+    realisticScrollFrame.ScrollBarThickness = 4
+    realisticScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    realisticScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+    realisticScrollFrame.Parent = RealisticSpawnerGuiFrame
+
+    local realisticGrid = Instance.new("UIGridLayout")
+    realisticGrid.CellSize = UDim2.new(0, SPAWNER_BOX_SIZE, 0, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
+    realisticGrid.CellPadding = UDim2.new(0, SPAWNER_PADDING, 0, SPAWNER_PADDING)
+    realisticGrid.FillDirectionMaxCells = SPAWNER_COLS
+    realisticGrid.SortOrder = Enum.SortOrder.LayoutOrder
+    realisticGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    realisticGrid.Parent = realisticScrollFrame
+
+    realisticGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        realisticScrollFrame.CanvasSize = UDim2.new(0, 0, 0, realisticGrid.AbsoluteContentSize.Y + 10)
+    end)
+
+    local controlsFrame = Instance.new("Frame")
+    controlsFrame.Size = UDim2.new(1, -16, 0, 68)
+    controlsFrame.Position = UDim2.new(0, 8, 1, -76)
+    controlsFrame.BackgroundColor3 = Color3.fromRGB(55, 22, 95)
+    controlsFrame.BorderSizePixel = 0
+    controlsFrame.Parent = RealisticSpawnerGuiFrame
+    Instance.new("UICorner", controlsFrame).CornerRadius = UDim.new(0, 10)
+
+    local minBox = Instance.new("TextBox")
+    minBox.Size = UDim2.new(0.5, -12, 0, 28)
+    minBox.Position = UDim2.new(0, 8, 0, 7)
+    minBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    minBox.BorderSizePixel = 0
+    minBox.PlaceholderText = "Minimum"
+    minBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    minBox.Text = "1"
+    minBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    minBox.Font = Enum.Font.Gotham
+    minBox.TextSize = 13
+    minBox.ClearTextOnFocus = false
+    minBox.Parent = controlsFrame
+    Instance.new("UICorner", minBox).CornerRadius = UDim.new(0, 7)
+
+    local maxBox = Instance.new("TextBox")
+    maxBox.Size = UDim2.new(0.5, -12, 0, 28)
+    maxBox.Position = UDim2.new(0.5, 4, 0, 7)
+    maxBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    maxBox.BorderSizePixel = 0
+    maxBox.PlaceholderText = "Maximum"
+    maxBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    maxBox.Text = "10"
+    maxBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    maxBox.Font = Enum.Font.Gotham
+    maxBox.TextSize = 13
+    maxBox.ClearTextOnFocus = false
+    maxBox.Parent = controlsFrame
+    Instance.new("UICorner", maxBox).CornerRadius = UDim.new(0, 7)
+
+    local spawnSelectedBtn = Instance.new("TextButton")
+    spawnSelectedBtn.Size = UDim2.new(1, -16, 0, 25)
+    spawnSelectedBtn.Position = UDim2.new(0, 8, 0, 39)
+    spawnSelectedBtn.BackgroundColor3 = BUTTON_COLOR
+    spawnSelectedBtn.Text = "SPAWN SELECTED"
+    spawnSelectedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    spawnSelectedBtn.Font = Enum.Font.GothamBold
+    spawnSelectedBtn.TextSize = 13
+    spawnSelectedBtn.Parent = controlsFrame
+    Instance.new("UICorner", spawnSelectedBtn).CornerRadius = UDim.new(0, 7)
+
+    local function getRealisticRange()
+        local minAmount = math.floor(tonumber(minBox.Text) or 1)
+        local maxAmount = math.floor(tonumber(maxBox.Text) or minAmount)
+
+        minAmount = math.clamp(minAmount, 1, MAX_WEAPON_AMOUNT)
+        maxAmount = math.clamp(maxAmount, 1, MAX_WEAPON_AMOUNT)
+
+        if maxAmount < minAmount then
+            minAmount, maxAmount = maxAmount, minAmount
+        end
+
+        minBox.Text = tostring(minAmount)
+        maxBox.Text = tostring(maxAmount)
+        return minAmount, maxAmount
+    end
+
+    local function setRealisticCardSelected(container, selected)
+        container:SetAttribute("Selected", selected)
+        container.BackgroundColor3 = selected and Color3.fromRGB(35, 130, 65) or Color3.fromRGB(45, 20, 75)
+
+        if selected then
+            task.defer(function()
+                if container.Parent and container:GetAttribute("Selected") then
+                    container.BackgroundColor3 = Color3.fromRGB(35, 130, 65)
+                end
+            end)
+        end
+    end
+
+    local function addRealisticWeaponBox(itemId, itemType, weaponName, rarity)
+        local rarityColor = getRarityColor(rarity)
+        local itemData = sync[itemType] and sync[itemType][itemId]
+        local key = tostring(itemType) .. ":" .. tostring(itemId)
+
+        local container = Instance.new("TextButton")
+        container.Name = tostring(itemId)
+        container.Size = UDim2.fromOffset(SPAWNER_BOX_SIZE, SPAWNER_BOX_SIZE + SPAWNER_NAME_HEIGHT + SPAWNER_RARITY_HEIGHT)
+        container.BackgroundColor3 = Color3.fromRGB(45, 20, 75)
+        container.BorderSizePixel = 0
+        container.Text = ""
+        container.AutoButtonColor = false
+        container:SetAttribute("SearchText", (tostring(weaponName or "") .. " " .. tostring(itemId) .. " " .. tostring(rarity or "") .. " " .. tostring(itemType)):lower())
+        container:SetAttribute("Selected", false)
+        container.Parent = realisticScrollFrame
+        Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = rarityColor
+        stroke.Thickness = 2
+        stroke.Transparency = 0.05
+        stroke.Parent = container
+
+        local thumbnail = Instance.new("ImageLabel")
+        thumbnail.Size = UDim2.new(1, -8, 0, 70)
+        thumbnail.Position = UDim2.new(0, 4, 0, 4)
+        thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
+        thumbnail.BorderSizePixel = 0
+        thumbnail.Image = itemData and itemData.Image or ""
+        thumbnail.ScaleType = Enum.ScaleType.Fit
+        thumbnail.Parent = container
+        Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
+
+        local rarityLabel = Instance.new("TextLabel")
+        rarityLabel.Size = UDim2.new(1, -4, 0, SPAWNER_RARITY_HEIGHT)
+        rarityLabel.Position = UDim2.new(0, 2, 0, 75)
+        rarityLabel.BackgroundTransparency = 1
+        rarityLabel.Text = rarity or "Unknown"
+        rarityLabel.TextColor3 = rarityColor
+        rarityLabel.Font = Enum.Font.GothamBold
+        rarityLabel.TextSize = 13
+        rarityLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        rarityLabel.Parent = container
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, -4, 0, SPAWNER_NAME_HEIGHT)
+        nameLabel.Position = UDim2.new(0, 2, 0, 94)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = weaponName or itemId
+        nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.TextSize = 12
+        nameLabel.TextWrapped = false
+        nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        nameLabel.Parent = container
+
+        container.MouseButton1Click:Connect(function()
+            if selectedRealisticWeapons[key] then
+                selectedRealisticWeapons[key] = nil
+                setRealisticCardSelected(container, false)
+            else
+                selectedRealisticWeapons[key] = {
+                    itemId = itemId,
+                    itemType = itemType,
+                    name = weaponName or itemId,
+                }
+                setRealisticCardSelected(container, true)
+            end
+        end)
+
+        container.MouseEnter:Connect(function()
+            if not container:GetAttribute("Selected") then
+                TweenService:Create(container, TweenInfo.new(0.15), {
+                    BackgroundColor3 = rarityColor:Lerp(Color3.fromRGB(20, 10, 35), 0.45),
+                }):Play()
+            else
+                container.BackgroundColor3 = Color3.fromRGB(35, 130, 65)
+            end
+        end)
+
+        container.MouseLeave:Connect(function()
+            if not container:GetAttribute("Selected") then
+                TweenService:Create(container, TweenInfo.new(0.15), {
+                    BackgroundColor3 = Color3.fromRGB(45, 20, 75),
+                }):Play()
+            else
+                container.BackgroundColor3 = Color3.fromRGB(35, 130, 65)
+            end
+        end)
+    end
+
+    populateRealisticSpawner = function()
+        if didPopulateRealisticSpawner then
+            return
+        end
+
+        didPopulateRealisticSpawner = true
+
+        local weapons = {}
+        local seen = {}
+
+        local function collect(container, itemType)
+            for itemId, data in pairs(container or {}) do
+                if type(data) == "table" and isSpawnerRarity(data) and not seen[itemId] then
+                    seen[itemId] = true
+
+                    table.insert(weapons, {
+                        itemId = itemId,
+                        itemType = itemType,
+                        name = data.ItemName or data.Name or itemId,
+                        rarity = data.Rarity or "Unknown",
+                    })
+                end
+            end
+        end
+
+        collect(sync.Weapons, "Weapons")
+        collect(sync.Item, "Item")
+
+        table.sort(weapons, function(a, b)
+            if a.rarity == b.rarity then
+                return a.name < b.name
+            end
+
+            if a.rarity == "Ancient" and b.rarity ~= "Ancient" then
+                return true
+            end
+
+            return false
+        end)
+
+        for index, weapon in ipairs(weapons) do
+            addRealisticWeaponBox(weapon.itemId, weapon.itemType, weapon.name, weapon.rarity)
+            local child = realisticScrollFrame:FindFirstChild(tostring(weapon.itemId))
+            if child then
+                child.LayoutOrder = index
+            end
+        end
+
+        filterSpawnerCards(realisticScrollFrame, realisticSearchBox.Text)
+    end
+
+    realisticSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        filterSpawnerCards(realisticScrollFrame, realisticSearchBox.Text)
+    end)
+
+    spawnSelectedBtn.MouseButton1Click:Connect(function()
+        local minAmount, maxAmount = getRealisticRange()
+        local spawnedCount = 0
+        local selectedCount = 0
+
+        for _, weapon in pairs(selectedRealisticWeapons) do
+            selectedCount += 1
+            local amount = math.random(minAmount, maxAmount)
+            if spawnWeaponByIdNoPopup(weapon.itemId, weapon.itemType, amount) then
+                spawnedCount += 1
+            end
+        end
+
+        if selectedCount < 1 then
+            spawnSelectedBtn.Text = "SELECT WEAPONS FIRST"
+        else
+            spawnSelectedBtn.Text = "SPAWNED " .. spawnedCount .. " TYPES"
+        end
+
+        task.delay(2, function()
+            spawnSelectedBtn.Text = "SPAWN SELECTED"
+        end)
+    end)
+end
+
 local function AddWeaponBox(itemId, itemType, weaponName, rarity)
     local rarityColor = getRarityColor(rarity)
     local itemData = sync[itemType] and sync[itemType][itemId]
@@ -2425,6 +2787,7 @@ local SpawnGodliesBtn = CreateBtn(SpawnerFrame, "SPAWN ALL GODLIES")
 local SpawnChromasBtn = CreateBtn(SpawnerFrame, "SPAWN ALL CHROMAS")
 local SpawnAncientsBtn = CreateBtn(SpawnerFrame, "SPAWN ALL ANCIENTS")
 local OpenSpawnerGuiBtn = CreateBtn(SpawnerFrame, "OPEN SPAWNER GUI")
+local OpenRealisticSpawnerGuiBtn = CreateBtn(SpawnerFrame, "REALISTIC SPAWNER GUI")
 
 SpawnSpecificBtn.MouseButton1Click:Connect(function()
     local weaponName = SpecificWeaponBox.Text
@@ -2502,6 +2865,11 @@ OpenSpawnerGuiBtn.MouseButton1Click:Connect(function()
     SpawnerGuiFrame.Visible = not SpawnerGuiFrame.Visible
 end)
 
+OpenRealisticSpawnerGuiBtn.MouseButton1Click:Connect(function()
+    populateRealisticSpawner()
+    RealisticSpawnerGuiFrame.Visible = not RealisticSpawnerGuiFrame.Visible
+end)
+
 local StartTradeBtn = CreateBtn(TradeFrame, "START TRADE")
 local OfferSpawnerBtn = CreateBtn(TradeFrame, "OFFER SPAWNER")
 local AddRandomBtn = CreateBtn(TradeFrame, "ADD RANDOM THEIR GODLY")
@@ -2524,10 +2892,437 @@ end)
 
 local FriendJoinToggleBtn = CreateBtn(SettingsFrame, "FRIEND JOINED")
 local AutoFriendJoinBtn = CreateBtn(SettingsFrame, "AUTO FRIEND JOIN: OFF")
+local applyAvatarFromUserId
+local AvatarChangerBtn = CreateBtn(SettingsFrame, "AVATAR CHANGER")
 CreateBtn(KeybindsFrame, "Toggle UI: None")
 CreateBtn(KeybindsFrame, "Start Trade: Z")
 CreateBtn(KeybindsFrame, "Friend Join: F")
 CreateBtn(KeybindsFrame, "Spawn All: None")
+
+do
+local AvatarChangerFrame = Instance.new("Frame")
+AvatarChangerFrame.Name = "AvatarChangerGUI"
+AvatarChangerFrame.Size = UDim2.new(0, 280, 0, 190)
+AvatarChangerFrame.Position = UDim2.new(0.5, -140, 0.5, -95)
+AvatarChangerFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+AvatarChangerFrame.BorderSizePixel = 0
+AvatarChangerFrame.Active = true
+AvatarChangerFrame.Draggable = true
+AvatarChangerFrame.Visible = false
+AvatarChangerFrame.Parent = SakaUI
+Instance.new("UICorner", AvatarChangerFrame).CornerRadius = UDim.new(0, 14)
+
+local AvatarChangerStroke = Instance.new("UIStroke")
+AvatarChangerStroke.Color = Color3.fromRGB(220, 120, 255)
+AvatarChangerStroke.Thickness = 2
+AvatarChangerStroke.Transparency = 0.15
+AvatarChangerStroke.Parent = AvatarChangerFrame
+
+local AvatarChangerTitle = Instance.new("TextLabel")
+AvatarChangerTitle.Size = UDim2.new(1, -44, 0, 36)
+AvatarChangerTitle.Position = UDim2.new(0, 14, 0, 6)
+AvatarChangerTitle.BackgroundTransparency = 1
+AvatarChangerTitle.Text = "Avatar Changer"
+AvatarChangerTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+AvatarChangerTitle.Font = Enum.Font.GothamBold
+AvatarChangerTitle.TextSize = 17
+AvatarChangerTitle.TextXAlignment = Enum.TextXAlignment.Left
+AvatarChangerTitle.Parent = AvatarChangerFrame
+
+local AvatarChangerCloseBtn = Instance.new("TextButton")
+AvatarChangerCloseBtn.Size = UDim2.new(0, 30, 0, 30)
+AvatarChangerCloseBtn.Position = UDim2.new(1, -38, 0, 7)
+AvatarChangerCloseBtn.BackgroundTransparency = 1
+AvatarChangerCloseBtn.Text = "X"
+AvatarChangerCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+AvatarChangerCloseBtn.Font = Enum.Font.GothamBold
+AvatarChangerCloseBtn.TextSize = 18
+AvatarChangerCloseBtn.Parent = AvatarChangerFrame
+
+local AvatarUserIdBox = Instance.new("TextBox")
+AvatarUserIdBox.Size = UDim2.new(1, -28, 0, 38)
+AvatarUserIdBox.Position = UDim2.new(0, 14, 0, 52)
+AvatarUserIdBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+AvatarUserIdBox.PlaceholderText = "Username or User ID"
+AvatarUserIdBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+AvatarUserIdBox.Text = ""
+AvatarUserIdBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+AvatarUserIdBox.Font = Enum.Font.Gotham
+AvatarUserIdBox.TextSize = 14
+AvatarUserIdBox.ClearTextOnFocus = false
+AvatarUserIdBox.Parent = AvatarChangerFrame
+Instance.new("UICorner", AvatarUserIdBox).CornerRadius = UDim.new(0, 8)
+
+local AvatarChangeBtn = Instance.new("TextButton")
+AvatarChangeBtn.Size = UDim2.new(1, -28, 0, 38)
+AvatarChangeBtn.Position = UDim2.new(0, 14, 0, 102)
+AvatarChangeBtn.BackgroundColor3 = BUTTON_COLOR
+AvatarChangeBtn.Text = "CHANGE AVATAR"
+AvatarChangeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AvatarChangeBtn.Font = Enum.Font.GothamBold
+AvatarChangeBtn.TextSize = 13
+AvatarChangeBtn.Parent = AvatarChangerFrame
+Instance.new("UICorner", AvatarChangeBtn).CornerRadius = UDim.new(0, 8)
+
+local AvatarResetBtn = Instance.new("TextButton")
+AvatarResetBtn.Size = UDim2.new(1, -28, 0, 34)
+AvatarResetBtn.Position = UDim2.new(0, 14, 0, 146)
+AvatarResetBtn.BackgroundColor3 = Color3.fromRGB(110, 70, 210)
+AvatarResetBtn.Text = "RESET AVATAR"
+AvatarResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AvatarResetBtn.Font = Enum.Font.GothamBold
+AvatarResetBtn.TextSize = 13
+AvatarResetBtn.Parent = AvatarChangerFrame
+Instance.new("UICorner", AvatarResetBtn).CornerRadius = UDim.new(0, 8)
+
+local function setAvatarButtonText(button, text)
+    button.Text = text
+    task.delay(2, function()
+        if button == AvatarChangeBtn then
+            button.Text = "CHANGE AVATAR"
+        elseif button == AvatarResetBtn then
+            button.Text = "RESET AVATAR"
+        end
+    end)
+end
+
+local function resolveAvatarUserId(input)
+    input = tostring(input or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if input == "" then
+        return nil, "TYPE USERNAME OR ID"
+    end
+
+    local livePlayer = Players:FindFirstChild(input)
+    if livePlayer then
+        return livePlayer.UserId, nil, livePlayer
+    end
+
+    local numericUserId = tonumber(input)
+    if numericUserId and numericUserId >= 1 then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.UserId == numericUserId then
+                return numericUserId, nil, player
+            end
+        end
+
+        return numericUserId
+    end
+
+    local ok, resolvedUserId = pcall(function()
+        return Players:GetUserIdFromNameAsync(input)
+    end)
+
+    if not ok or not resolvedUserId then
+        return nil, "USER NOT FOUND"
+    end
+
+    return resolvedUserId
+end
+
+local function clearLocalAvatarAppearance(character)
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("Accessory")
+            or child:IsA("Accoutrement")
+            or child:IsA("Shirt")
+            or child:IsA("Pants")
+            or child:IsA("ShirtGraphic")
+            or child:IsA("BodyColors")
+            or child:IsA("CharacterMesh") then
+            child:Destroy()
+        end
+    end
+
+    local head = character:FindFirstChild("Head")
+    if head then
+        for _, child in ipairs(head:GetChildren()) do
+            if child:IsA("Decal") and child.Name == "face" then
+                child:Destroy()
+            end
+        end
+    end
+end
+
+local function findCharacterAttachment(character, attachmentName)
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("Attachment") and descendant.Name == attachmentName then
+            return descendant
+        end
+    end
+
+    return nil
+end
+
+local function weldAccessoryToCharacter(accessory, character)
+    local handle = accessory:FindFirstChild("Handle")
+    if not handle or not handle:IsA("BasePart") then
+        return false
+    end
+
+    handle.Anchored = false
+    handle.CanCollide = false
+    handle.Massless = true
+
+    local handleAttachment = handle:FindFirstChildOfClass("Attachment")
+    local characterAttachment = handleAttachment and findCharacterAttachment(character, handleAttachment.Name)
+    local targetPart = characterAttachment and characterAttachment.Parent
+
+    if not handleAttachment or not characterAttachment or not targetPart or not targetPart:IsA("BasePart") then
+        targetPart = character:FindFirstChild("Head")
+        if not targetPart or not targetPart:IsA("BasePart") then
+            return false
+        end
+    end
+
+    local weld = handle:FindFirstChild("AccessoryWeld")
+    if not weld then
+        weld = Instance.new("Weld")
+        weld.Name = "AccessoryWeld"
+        weld.Parent = handle
+    end
+
+    weld.Part0 = handle
+    weld.Part1 = targetPart
+
+    if handleAttachment and characterAttachment then
+        weld.C0 = handleAttachment.CFrame
+        weld.C1 = characterAttachment.CFrame
+    else
+        local ok, attachmentPoint = pcall(function()
+            return accessory.AttachmentPoint
+        end)
+
+        weld.C0 = CFrame.new()
+        weld.C1 = ok and attachmentPoint or CFrame.new(0, 0.5, 0)
+        handle.CFrame = targetPart.CFrame * weld.C1 * weld.C0:Inverse()
+    end
+
+    return true
+end
+
+local function addAvatarAccessory(character, humanoid, sourceAccessory)
+    local accessory = sourceAccessory:Clone()
+    accessory.Parent = character
+    weldAccessoryToCharacter(accessory, character)
+end
+
+local function applyBodyDescriptionValues(humanoid, description)
+    if humanoid.RigType ~= Enum.HumanoidRigType.R15 then
+        return
+    end
+
+    local scaleMap = {
+        BodyDepthScale = { "DepthScale", "BodyDepthScale" },
+        BodyHeightScale = { "HeightScale", "BodyHeightScale" },
+        BodyProportionScale = { "ProportionScale", "BodyProportionScale" },
+        BodyTypeScale = { "BodyTypeScale" },
+        BodyWidthScale = { "WidthScale", "BodyWidthScale" },
+        HeadScale = { "HeadScale" },
+    }
+
+    for humanoidScaleName, descriptionNames in pairs(scaleMap) do
+        local valueObject = humanoid:FindFirstChild(humanoidScaleName)
+        if valueObject and valueObject:IsA("NumberValue") then
+            for _, descriptionName in ipairs(descriptionNames) do
+                local ok, sourceValue = pcall(function()
+                    return description[descriptionName]
+                end)
+
+                if ok and typeof(sourceValue) == "number" then
+                    valueObject.Value = sourceValue
+                    break
+                end
+            end
+        end
+    end
+end
+
+local function copyHeadFace(sourceModel, character)
+    local sourceHead = sourceModel:FindFirstChild("Head")
+    local targetHead = character:FindFirstChild("Head")
+    if not sourceHead or not targetHead then
+        return
+    end
+
+    for _, child in ipairs(targetHead:GetChildren()) do
+        if child:IsA("Decal") or child:IsA("Texture") then
+            child:Destroy()
+        end
+    end
+
+    for _, child in ipairs(sourceHead:GetChildren()) do
+        if child:IsA("Decal") or child:IsA("Texture") then
+            child:Clone().Parent = targetHead
+        end
+    end
+end
+
+local function replaceR15BodyPartsFromModel(sourceModel, character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local sourceHumanoid = sourceModel:FindFirstChildOfClass("Humanoid")
+
+    if not humanoid
+        or not sourceHumanoid
+        or humanoid.RigType ~= Enum.HumanoidRigType.R15
+        or sourceHumanoid.RigType ~= Enum.HumanoidRigType.R15 then
+        return
+    end
+
+    local bodyPartMap = {
+        Head = Enum.BodyPartR15.Head,
+        UpperTorso = Enum.BodyPartR15.UpperTorso,
+        LowerTorso = Enum.BodyPartR15.LowerTorso,
+        LeftUpperArm = Enum.BodyPartR15.LeftUpperArm,
+        LeftLowerArm = Enum.BodyPartR15.LeftLowerArm,
+        LeftHand = Enum.BodyPartR15.LeftHand,
+        RightUpperArm = Enum.BodyPartR15.RightUpperArm,
+        RightLowerArm = Enum.BodyPartR15.RightLowerArm,
+        RightHand = Enum.BodyPartR15.RightHand,
+        LeftUpperLeg = Enum.BodyPartR15.LeftUpperLeg,
+        LeftLowerLeg = Enum.BodyPartR15.LeftLowerLeg,
+        LeftFoot = Enum.BodyPartR15.LeftFoot,
+        RightUpperLeg = Enum.BodyPartR15.RightUpperLeg,
+        RightLowerLeg = Enum.BodyPartR15.RightLowerLeg,
+        RightFoot = Enum.BodyPartR15.RightFoot,
+    }
+
+    for partName, bodyPartEnum in pairs(bodyPartMap) do
+        local sourcePart = sourceModel:FindFirstChild(partName)
+        if sourcePart and sourcePart:IsA("BasePart") then
+            local replacement = sourcePart:Clone()
+            replacement.Name = partName
+            replacement.Anchored = false
+            replacement.CanCollide = false
+            replacement.Massless = false
+
+            pcall(function()
+                humanoid:ReplaceBodyPartR15(bodyPartEnum, replacement)
+            end)
+        end
+    end
+end
+
+local function copyAvatarModelAppearance(sourceModel, character)
+    clearLocalAvatarAppearance(character)
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    replaceR15BodyPartsFromModel(sourceModel, character)
+
+    for _, child in ipairs(sourceModel:GetDescendants()) do
+        if child:IsA("BodyColors")
+            or child:IsA("Shirt")
+            or child:IsA("Pants")
+            or child:IsA("ShirtGraphic") then
+            child:Clone().Parent = character
+        elseif child:IsA("CharacterMesh") and humanoid and humanoid.RigType == Enum.HumanoidRigType.R6 then
+            child:Clone().Parent = character
+        elseif child:IsA("Accessory") or child:IsA("Accoutrement") then
+            addAvatarAccessory(character, humanoid, child)
+        elseif child:IsA("BasePart") then
+            local targetPart = character:FindFirstChild(child.Name)
+            if targetPart
+                and targetPart:IsA("BasePart")
+                and not targetPart:IsA("MeshPart")
+                and not child:IsA("MeshPart") then
+                targetPart.Color = child.Color
+                targetPart.Material = child.Material
+            end
+        end
+    end
+
+    copyHeadFace(sourceModel, character)
+
+    return true
+end
+
+local function applyAvatarByGeneratedModel(userId, character)
+    local ok, sourceModel = pcall(function()
+        return Players:CreateHumanoidModelFromUserId(userId)
+    end)
+
+    if not ok or not sourceModel then
+        return false, "MODEL FETCH FAILED"
+    end
+
+    sourceModel.Parent = nil
+
+    local copyOk, copyErr = pcall(function()
+        copyAvatarModelAppearance(sourceModel, character)
+    end)
+
+    sourceModel:Destroy()
+
+    if not copyOk then
+        warn("[Carti Hub] Avatar model copy failed: " .. tostring(copyErr))
+        return false, "COPY FAILED"
+    end
+
+    return true
+end
+
+applyAvatarFromUserId = function(userIdOrName)
+    local userId, resolveError = resolveAvatarUserId(userIdOrName)
+    if not userId then
+        return false, resolveError or "INVALID USER"
+    end
+
+    local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return false, "NO HUMANOID"
+    end
+
+    local ok, description = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(userId)
+    end)
+
+    if not ok or not description then
+        return false, "USER NOT FOUND"
+    end
+
+    local applyOk, applyErr = pcall(function()
+        humanoid:ApplyDescriptionReset(description)
+    end)
+
+    if not applyOk then
+        applyOk, applyErr = pcall(function()
+            humanoid:ApplyDescription(description)
+        end)
+    end
+
+    if not applyOk then
+        warn("[Carti Hub] HumanoidDescription apply failed, using model copy fallback: " .. tostring(applyErr))
+        applyBodyDescriptionValues(humanoid, description)
+        return applyAvatarByGeneratedModel(userId, character)
+    end
+
+    return true
+end
+
+AvatarChangerBtn.MouseButton1Click:Connect(function()
+    AvatarChangerFrame.Visible = not AvatarChangerFrame.Visible
+end)
+
+AvatarChangerCloseBtn.MouseButton1Click:Connect(function()
+    AvatarChangerFrame.Visible = false
+end)
+
+AvatarChangeBtn.MouseButton1Click:Connect(function()
+    local ok, errText = applyAvatarFromUserId(AvatarUserIdBox.Text)
+    setAvatarButtonText(AvatarChangeBtn, ok and "AVATAR CHANGED" or tostring(errText or "FAILED"))
+end)
+
+AvatarResetBtn.MouseButton1Click:Connect(function()
+    local ok, errText = applyAvatarFromUserId(localPlayer.UserId)
+    setAvatarButtonText(AvatarResetBtn, ok and "AVATAR RESET" or tostring(errText or "FAILED"))
+end)
+
+AvatarUserIdBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed and AvatarUserIdBox.Text ~= "" then
+        local ok, errText = applyAvatarFromUserId(AvatarUserIdBox.Text)
+        setAvatarButtonText(AvatarChangeBtn, ok and "AVATAR CHANGED" or tostring(errText or "FAILED"))
+    end
+end)
+end
 
 local customUsers = {
     "XKylie_2010", "lakyboxsuperfann", "staglagala", "Anniev6157", "Augus0260", "carla_zion1",
@@ -2677,6 +3472,13 @@ local function showFriendJoinTopToast(username)
     avatar.Parent = frame
     Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
 
+    local avatarStroke = Instance.new("UIStroke")
+    avatarStroke.Color = Color3.fromRGB(0, 105, 210)
+    avatarStroke.Transparency = 0
+    avatarStroke.Thickness = 1
+    avatarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    avatarStroke.Parent = avatar
+
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, -66, 1, 0)
     title.Position = UDim2.new(0, 58, 0, 0)
@@ -2684,7 +3486,7 @@ local function showFriendJoinTopToast(username)
     title.Text = toastText
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.BuilderSansBold
-    title.TextSize = 21
+    title.TextSize = 18
     title.TextTruncate = Enum.TextTruncate.AtEnd
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextYAlignment = Enum.TextYAlignment.Center
@@ -2695,7 +3497,7 @@ local function showFriendJoinTopToast(username)
     end
 
     TweenService:Create(holder, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, 0, 0, -35),
+        Position = UDim2.new(0.5, 0, 0, -30),
     }):Play()
 
     task.delay(4.5, function()
@@ -2720,9 +3522,7 @@ end
 
 local function showFakeFriendJoinNotification(username)
     username = username or customUsers[math.random(1, #customUsers)] or "RobloxPlayer"
-  pcall(function()
-      showFriendJoinSystemMessage(username)
-  end)
+    showFriendJoinSystemMessage(username)
     showFriendJoinTopToast(username)
 end
 
@@ -3570,6 +4370,7 @@ end)
 
 _G.CartiHubSpawnWeapon = spawnWeapon
 _G.CartiHubSpawnWeaponById = spawnWeaponById
+_G.CartiHubSpawnWeaponByIdNoPopup = spawnWeaponByIdNoPopup
 _G.CartiHubSpawnAllGodlies = spawnAllGodlyWeapons
 _G.CartiHubSpawnAllChromas = spawnAllChromaWeapons
 _G.CartiHubSpawnAllAncients = spawnAllAncientWeapons
@@ -3578,6 +4379,7 @@ _G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
 _G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
 _G.CartiHubPopulateWeaponSpawner = populateWeaponSpawner
 _G.CartiHubPopulateOfferSpawner = populateOfferSpawner
+_G.CartiHubPopulateRealisticSpawner = populateRealisticSpawner
 _G.CartiHubAddWeaponBox = AddWeaponBox
 _G.CartiHubWeaponVisuals = WeaponVisuals
 _G.CartiHubApplyWeaponVisual = applyWeaponVisual
@@ -3585,6 +4387,11 @@ _G.CartiHubApplyEquippedWeaponVisuals = applyEquippedWeaponVisuals
 _G.CartiHubShowFriendJoin = showFakeFriendJoinNotification
 _G.CartiHubShowRandomFriendJoin = showRandomFakeFriendJoinNotification
 _G.CartiHubSetAutoFriendJoin = setAutoFriendJoinEnabled
+_G.CartiHubApplyAvatarFromUserId = applyAvatarFromUserId
+_G.CartiHubApplyAvatar = applyAvatarFromUserId
+_G.CartiHubResetAvatar = function()
+    return applyAvatarFromUserId(localPlayer.UserId)
+end
 
 print("[Carti Hub] Loaded.")
 print("[Carti Hub] Spawner GUI shows Godly and Ancient weapons only, 5 per row, with rarity colors.")
