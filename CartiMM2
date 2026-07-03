@@ -2720,7 +2720,9 @@ end
 
 local function showFakeFriendJoinNotification(username)
     username = username or customUsers[math.random(1, #customUsers)] or "RobloxPlayer"
-    showFriendJoinSystemMessage(username)
+  pcall(function()
+      showFriendJoinSystemMessage(username)
+  end)
     showFriendJoinTopToast(username)
 end
 
