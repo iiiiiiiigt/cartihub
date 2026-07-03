@@ -14,6 +14,7 @@ local sync = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sy
 local itemPopupService = require(ReplicatedStorage:WaitForChild("ClientServices"):WaitForChild("ItemPopupService"))
 
 local currentWeaponAmount = 1
+local MAX_WEAPON_AMOUNT = 113
 local BUTTON_COLOR = Color3.fromRGB(200, 80, 255)
 local BUTTON_HOVER_COLOR = Color3.fromRGB(220, 100, 255)
 local SakaUI
@@ -888,7 +889,6 @@ local WeaponVisuals = {
     ChromaFace = Enum.NormalId.Back,
 },
 }
-
 local function getPlacementAttachment(character, placement)
     if placement == "Back" then
         return character:FindFirstChild("UpperTorso")
@@ -1397,6 +1397,35 @@ local function spawnWeaponById(itemId, itemType, amount)
     return true
 end
 
+local function normalizeItemText(value)
+    return tostring(value or ""):lower():gsub("[^%w%?]", "")
+end
+
+local excludedBulkSpawnNames = {
+    ["???"] = true,
+    ["chroma???"] = true,
+    ["bronzeraygun"] = true,
+    ["goldraygun"] = true,
+    ["redraygun"] = true,
+    ["silverraygun"] = true,
+    ["synthwave"] = true,
+    ["niksscythe"] = true,
+    ["gingerscythe"] = true,
+    ["icecrusher"] = true,
+    ["reaver"] = true,
+}
+
+local function isExcludedFromBulkSpawn(itemId, data)
+    local idText = normalizeItemText(itemId)
+    local nameText = normalizeItemText(data and (data.ItemName or data.Name))
+
+    if excludedBulkSpawnNames[idText] or excludedBulkSpawnNames[nameText] then
+        return true
+    end
+
+    return idText:find("exo", 1, true) ~= nil or nameText:find("exo", 1, true) ~= nil
+end
+
 local function spawnAllGodlyWeapons(amount)
     amount = tonumber(amount) or 1
     amount = math.max(1, amount)
@@ -1406,7 +1435,10 @@ local function spawnAllGodlyWeapons(amount)
 
     local function collect(container, itemType)
         for itemId, data in pairs(container or {}) do
-            if type(data) == "table" and data.Rarity == "Godly" and not seen[itemId] then
+            if type(data) == "table"
+                and data.Rarity == "Godly"
+                and not isExcludedFromBulkSpawn(itemId, data)
+                and not seen[itemId] then
                 seen[itemId] = true
 
                 local owned = getProfileOwnedTable(itemType)
@@ -1424,6 +1456,90 @@ local function spawnAllGodlyWeapons(amount)
     refreshMainInventoryNow()
 
     print(("[Carti Hub] Spawned %dx of %d godly weapons"):format(amount, spawnedCount))
+    return spawnedCount
+end
+
+local function spawnAllAncientWeapons(amount)
+    amount = tonumber(amount) or 1
+    amount = math.max(1, amount)
+
+    local spawnedCount = 0
+    local seen = {}
+
+    local function collect(container, itemType)
+        for itemId, data in pairs(container or {}) do
+            if type(data) == "table"
+                and data.Rarity == "Ancient"
+                and not isExcludedFromBulkSpawn(itemId, data)
+                and not seen[itemId] then
+                seen[itemId] = true
+
+                local owned = getProfileOwnedTable(itemType)
+                if owned then
+                    local current = tonumber(owned[itemId]) or 0
+                    owned[itemId] = current + amount
+                    spawnedCount += 1
+                end
+            end
+        end
+    end
+
+    collect(sync.Weapons, "Weapons")
+    collect(sync.Item, "Item")
+    refreshMainInventoryNow()
+
+    print(("[Carti Hub] Spawned %dx of %d ancient weapons"):format(amount, spawnedCount))
+    return spawnedCount
+end
+
+local function isChromaWeapon(itemId, data)
+    if type(data) ~= "table" then
+        return false
+    end
+
+    if data.Chroma == true
+        or data.IsChroma == true
+        or data.ChromaTexture ~= nil
+        or data.ChromaStaticLayer ~= nil then
+        return true
+    end
+
+    local idText = tostring(itemId):lower()
+    local nameText = tostring(data.ItemName or data.Name or ""):lower()
+
+    return idText:find("chroma", 1, true) ~= nil
+        or nameText:find("chroma", 1, true) ~= nil
+end
+
+local function spawnAllChromaWeapons(amount)
+    amount = tonumber(amount) or 1
+    amount = math.max(1, amount)
+
+    local spawnedCount = 0
+    local seen = {}
+
+    local function collect(container, itemType)
+        for itemId, data in pairs(container or {}) do
+            if isChromaWeapon(itemId, data)
+                and not isExcludedFromBulkSpawn(itemId, data)
+                and not seen[itemId] then
+                seen[itemId] = true
+
+                local owned = getProfileOwnedTable(itemType)
+                if owned then
+                    local current = tonumber(owned[itemId]) or 0
+                    owned[itemId] = current + amount
+                    spawnedCount += 1
+                end
+            end
+        end
+    end
+
+    collect(sync.Weapons, "Weapons")
+    collect(sync.Item, "Item")
+    refreshMainInventoryNow()
+
+    print(("[Carti Hub] Spawned %dx of %d chroma weapons"):format(amount, spawnedCount))
     return spawnedCount
 end
 
@@ -1562,7 +1678,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 50)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Carti Hub"
+Title.Text = "t.me/cartiscripts"
 Title.TextColor3 = Color3.fromRGB(255, 235, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 22
@@ -1700,10 +1816,13 @@ local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
     local knob = Instance.new("TextButton")
-    knob.Size = UDim2.new(0, 18, 0, 18)
-    knob.Position = UDim2.new(1, -9, 0.5, -9)
+    knob.Size = UDim2.new(0, 34, 0, 18)
+    knob.Position = UDim2.new(1, -17, 0.5, -9)
     knob.BackgroundColor3 = Color3.fromRGB(255, 235, 255)
-    knob.Text = ""
+    knob.Text = tostring(defaultVal)
+    knob.TextColor3 = Color3.fromRGB(70, 30, 120)
+    knob.Font = Enum.Font.GothamBold
+    knob.TextSize = 10
     knob.Parent = fill
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
@@ -1730,6 +1849,7 @@ local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
 
             fill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0)
             label.Text = text .. ": " .. val
+            knob.Text = tostring(val)
             callback(val)
         end
     end)
@@ -1869,10 +1989,13 @@ PopupSliderFill.Parent = PopupSliderTrack
 Instance.new("UICorner", PopupSliderFill).CornerRadius = UDim.new(1, 0)
 
 local PopupSliderKnob = Instance.new("TextButton")
-PopupSliderKnob.Size = UDim2.new(0, 18, 0, 18)
-PopupSliderKnob.Position = UDim2.new(0, -9, 0.5, -9)
+PopupSliderKnob.Size = UDim2.new(0, 34, 0, 18)
+PopupSliderKnob.Position = UDim2.new(0, -17, 0.5, -9)
 PopupSliderKnob.BackgroundColor3 = Color3.fromRGB(255, 235, 255)
-PopupSliderKnob.Text = ""
+PopupSliderKnob.Text = tostring(currentWeaponAmount)
+PopupSliderKnob.TextColor3 = Color3.fromRGB(70, 30, 120)
+PopupSliderKnob.Font = Enum.Font.GothamBold
+PopupSliderKnob.TextSize = 10
 PopupSliderKnob.Parent = PopupSliderFill
 Instance.new("UICorner", PopupSliderKnob).CornerRadius = UDim.new(1, 0)
 
@@ -1880,7 +2003,7 @@ local popupDraggingAmount = false
 
 local function setPopupSpawnAmountFromPercent(percent)
     local minAmount = 1
-    local maxAmount = 50
+    local maxAmount = MAX_WEAPON_AMOUNT
     percent = math.clamp(percent, 0, 1)
 
     local value = math.floor(minAmount + ((maxAmount - minAmount) * percent) + 0.5)
@@ -1888,6 +2011,7 @@ local function setPopupSpawnAmountFromPercent(percent)
 
     currentWeaponAmount = value
     PopupAmountLabel.Text = "Spawn Amount: " .. value
+    PopupSliderKnob.Text = tostring(value)
     PopupSliderFill.Size = UDim2.new((value - minAmount) / (maxAmount - minAmount), 0, 1, 0)
 end
 
@@ -2293,11 +2417,13 @@ end
 local SpecificWeaponBox = CreateBox(SpawnerFrame, "Spawn Weapon (e.g. Harvester)")
 local SpawnSpecificBtn = CreateBtn(SpawnerFrame, "SPAWN WEAPON")
 
-CreateSlider(SpawnerFrame, "Weapon Amount", 1, 500, 1, 1, function(val)
+CreateSlider(SpawnerFrame, "Weapon Amount", 1, MAX_WEAPON_AMOUNT, 1, 1, function(val)
     currentWeaponAmount = val
 end)
 
 local SpawnGodliesBtn = CreateBtn(SpawnerFrame, "SPAWN ALL GODLIES")
+local SpawnChromasBtn = CreateBtn(SpawnerFrame, "SPAWN ALL CHROMAS")
+local SpawnAncientsBtn = CreateBtn(SpawnerFrame, "SPAWN ALL ANCIENTS")
 local OpenSpawnerGuiBtn = CreateBtn(SpawnerFrame, "OPEN SPAWNER GUI")
 
 SpawnSpecificBtn.MouseButton1Click:Connect(function()
@@ -2341,6 +2467,36 @@ SpawnGodliesBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+SpawnChromasBtn.MouseButton1Click:Connect(function()
+    local count = spawnAllChromaWeapons(currentWeaponAmount)
+    if count > 0 then
+        SpawnChromasBtn.Text = "SPAWNED " .. count .. " CHROMAS"
+        task.delay(2, function()
+            SpawnChromasBtn.Text = "SPAWN ALL CHROMAS"
+        end)
+    else
+        SpawnChromasBtn.Text = "NO CHROMAS FOUND"
+        task.delay(2, function()
+            SpawnChromasBtn.Text = "SPAWN ALL CHROMAS"
+        end)
+    end
+end)
+
+SpawnAncientsBtn.MouseButton1Click:Connect(function()
+    local count = spawnAllAncientWeapons(currentWeaponAmount)
+    if count > 0 then
+        SpawnAncientsBtn.Text = "SPAWNED " .. count .. " ANCIENTS"
+        task.delay(2, function()
+            SpawnAncientsBtn.Text = "SPAWN ALL ANCIENTS"
+        end)
+    else
+        SpawnAncientsBtn.Text = "NO ANCIENTS FOUND"
+        task.delay(2, function()
+            SpawnAncientsBtn.Text = "SPAWN ALL ANCIENTS"
+        end)
+    end
+end)
+
 OpenSpawnerGuiBtn.MouseButton1Click:Connect(function()
     populateWeaponSpawner()
     SpawnerGuiFrame.Visible = not SpawnerGuiFrame.Visible
@@ -2358,10 +2514,19 @@ end)
 
 CreateBtn(SettingsFrame, "TRADE REQUEST: OFF")
 CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
-CreateSlider(SettingsFrame, "Friend Joined Delay (Sec)", 30, 300, 30, 10, function() end)
-CreateBtn(SettingsFrame, "FRIEND JOINED: OFF")
+local friendJoinDelaySeconds = 30
+local autoFriendJoinEnabled = false
+local autoFriendJoinSequence = 0
+
+CreateSlider(SettingsFrame, "Friend Joined Delay (Sec)", 30, 300, 30, 10, function(val)
+    friendJoinDelaySeconds = val
+end)
+
+local FriendJoinToggleBtn = CreateBtn(SettingsFrame, "FRIEND JOINED")
+local AutoFriendJoinBtn = CreateBtn(SettingsFrame, "AUTO FRIEND JOIN: OFF")
 CreateBtn(KeybindsFrame, "Toggle UI: None")
 CreateBtn(KeybindsFrame, "Start Trade: Z")
+CreateBtn(KeybindsFrame, "Friend Join: F")
 CreateBtn(KeybindsFrame, "Spawn All: None")
 
 local customUsers = {
@@ -2396,6 +2561,205 @@ end
 local function getFakeTradeSenderName()
     return currentFakeTradeSenderName or "RandomPlayer"
 end
+
+local function getFriendJoinThumbnail(username)
+    local ok, userId = pcall(function()
+        return Players:GetUserIdFromNameAsync(username)
+    end)
+
+    if not ok or not userId then
+        return "rbxthumb://type=AvatarHeadShot&id=1&w=150&h=150"
+    end
+
+    return ("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150"):format(userId)
+end
+
+local function showFriendJoinSystemMessage(username)
+    local message = ("Your friend %s has joined the game."):format(username)
+    local textChatOk = pcall(function()
+        local TextChatService = game:GetService("TextChatService")
+        local channels = TextChatService:FindFirstChild("TextChannels")
+        local systemChannel = channels and (
+            channels:FindFirstChild("RBXSystem")
+            or channels:FindFirstChild("RBXGeneral")
+        )
+
+        if systemChannel then
+            systemChannel:DisplaySystemMessage(
+                '<font color="rgb(255,255,255)">' .. message .. '</font>'
+            )
+        else
+            error("No TextChatService system channel")
+        end
+    end)
+
+    if textChatOk then
+        return true
+    end
+
+    local StarterGui = game:GetService("StarterGui")
+    for _ = 1, 20 do
+        local legacyOk = pcall(function()
+            StarterGui:SetCore("ChatMakeSystemMessage", {
+                Text = message,
+                Color = Color3.fromRGB(255, 255, 255),
+                Font = Enum.Font.SourceSans,
+                TextSize = 18,
+            })
+        end)
+
+        if legacyOk then
+            return true
+        end
+
+        task.wait(0.25)
+    end
+
+    warn("[Carti Hub] Could not show friend join chat notification.")
+    return false
+end
+
+local friendJoinToastSequence = 0
+
+local function showFriendJoinTopToast(username)
+    friendJoinToastSequence += 1
+    local sequence = friendJoinToastSequence
+    local parent = safeParent()
+
+    local oldGui = parent:FindFirstChild("CartiHubFriendJoinTopToast")
+    if oldGui then
+        oldGui:Destroy()
+    end
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "CartiHubFriendJoinTopToast"
+    gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = false
+    gui.DisplayOrder = 100000
+    gui.Parent = parent
+
+    local toastText = tostring(username) .. " joined you"
+
+    local holder = Instance.new("Frame")
+    holder.AnchorPoint = Vector2.new(0.5, 0)
+    holder.Size = UDim2.new(0, 405, 0, 58)
+    holder.Position = UDim2.new(0.5, 0, 0, -72)
+    holder.BackgroundTransparency = 1
+    holder.Parent = gui
+
+    local scale = Instance.new("UIScale")
+    scale.Scale = 1
+    scale.Parent = holder
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.fromScale(1, 1)
+    frame.BackgroundColor3 = Color3.fromRGB(90, 91, 97)
+    frame.BackgroundTransparency = 0
+    frame.BorderSizePixel = 0
+    frame.Parent = holder
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Rotation = 90
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(118, 119, 126)),
+        ColorSequenceKeypoint.new(0.45, Color3.fromRGB(98, 99, 106)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 81, 88)),
+    })
+    gradient.Parent = frame
+
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 36, 0, 36)
+    avatar.Position = UDim2.new(0, 12, 0.5, -18)
+    avatar.BackgroundColor3 = Color3.fromRGB(18, 18, 20)
+    avatar.BorderSizePixel = 0
+    avatar.Image = getFriendJoinThumbnail(username)
+    avatar.Parent = frame
+    Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -66, 1, 0)
+    title.Position = UDim2.new(0, 58, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = toastText
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.BuilderSansBold
+    title.TextSize = 21
+    title.TextTruncate = Enum.TextTruncate.AtEnd
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.TextYAlignment = Enum.TextYAlignment.Center
+    title.Parent = frame
+
+    if holder.AbsoluteSize.X > 0 and holder.AbsoluteSize.X > gui.AbsoluteSize.X - 24 then
+        scale.Scale = math.max(0.72, (gui.AbsoluteSize.X - 24) / holder.AbsoluteSize.X)
+    end
+
+    TweenService:Create(holder, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0, -35),
+    }):Play()
+
+    task.delay(4.5, function()
+        if sequence ~= friendJoinToastSequence or not holder.Parent then
+            return
+        end
+
+        TweenService:Create(holder, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, 0, 0, -72),
+        }):Play()
+
+        TweenService:Create(frame, TweenInfo.new(0.2), {
+            BackgroundTransparency = 1,
+        }):Play()
+
+        task.wait(0.28)
+        if gui.Parent then
+            gui:Destroy()
+        end
+    end)
+end
+
+local function showFakeFriendJoinNotification(username)
+    username = username or customUsers[math.random(1, #customUsers)] or "RobloxPlayer"
+    showFriendJoinSystemMessage(username)
+    showFriendJoinTopToast(username)
+end
+
+local function showRandomFakeFriendJoinNotification()
+    showFakeFriendJoinNotification(customUsers[math.random(1, #customUsers)])
+end
+
+local function setAutoFriendJoinEnabled(enabled)
+    autoFriendJoinEnabled = enabled
+    autoFriendJoinSequence += 1
+    local sequence = autoFriendJoinSequence
+
+    AutoFriendJoinBtn.Text = enabled and "AUTO FRIEND JOIN: ON" or "AUTO FRIEND JOIN: OFF"
+    AutoFriendJoinBtn.BackgroundColor3 = enabled and BUTTON_HOVER_COLOR or BUTTON_COLOR
+
+    if not enabled then
+        return
+    end
+
+    task.spawn(function()
+        while autoFriendJoinEnabled and sequence == autoFriendJoinSequence and SakaUI and SakaUI.Parent do
+            showRandomFakeFriendJoinNotification()
+
+            local waitRemaining = math.max(1, tonumber(friendJoinDelaySeconds) or 30)
+            while waitRemaining > 0 and autoFriendJoinEnabled and sequence == autoFriendJoinSequence do
+                task.wait(math.min(1, waitRemaining))
+                waitRemaining -= 1
+            end
+        end
+    end)
+end
+
+FriendJoinToggleBtn.MouseButton1Click:Connect(function()
+    showRandomFakeFriendJoinNotification()
+end)
+
+AutoFriendJoinBtn.MouseButton1Click:Connect(function()
+    setAutoFriendJoinEnabled(not autoFriendJoinEnabled)
+end)
 
 local theirOffer = {}
 local localOffer = {}
@@ -3193,6 +3557,8 @@ _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect
 
     if input.KeyCode == Enum.KeyCode.Z then
         showIncomingTradeRequest()
+    elseif input.KeyCode == Enum.KeyCode.F then
+        showRandomFakeFriendJoinNotification()
     elseif input.KeyCode == Enum.KeyCode.Y then
         addRandomGodlyToTheirOffer()
     elseif input.KeyCode == Enum.KeyCode.B then
@@ -3203,6 +3569,8 @@ end)
 _G.CartiHubSpawnWeapon = spawnWeapon
 _G.CartiHubSpawnWeaponById = spawnWeaponById
 _G.CartiHubSpawnAllGodlies = spawnAllGodlyWeapons
+_G.CartiHubSpawnAllChromas = spawnAllChromaWeapons
+_G.CartiHubSpawnAllAncients = spawnAllAncientWeapons
 _G.CartiHubStartTradeRequest = showIncomingTradeRequest
 _G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
 _G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
@@ -3212,6 +3580,9 @@ _G.CartiHubAddWeaponBox = AddWeaponBox
 _G.CartiHubWeaponVisuals = WeaponVisuals
 _G.CartiHubApplyWeaponVisual = applyWeaponVisual
 _G.CartiHubApplyEquippedWeaponVisuals = applyEquippedWeaponVisuals
+_G.CartiHubShowFriendJoin = showFakeFriendJoinNotification
+_G.CartiHubShowRandomFriendJoin = showRandomFakeFriendJoinNotification
+_G.CartiHubSetAutoFriendJoin = setAutoFriendJoinEnabled
 
 print("[Carti Hub] Loaded.")
 print("[Carti Hub] Spawner GUI shows Godly and Ancient weapons only, 5 per row, with rarity colors.")
