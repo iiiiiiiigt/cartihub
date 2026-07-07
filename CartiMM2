@@ -887,8 +887,115 @@ local WeaponVisuals = {
     ChromaTexture = "",
     ChromaStaticLayer = "",
     ChromaFace = Enum.NormalId.Back,
+    CloneVisualChildrenFromPlayer = "caribbeansseas",
+},
+["Celestial"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://109711282082830",
+    TextureId = "rbxassetid://79010754957272",
+    Scale = Vector3.new(0.07, 0.07, 0.07),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    SurfaceColorMap = "rbxassetid://120904608273443",
+    SurfaceMetalnessMap = "rbxassetid://95735363537147",
+    SurfaceNormalMap = "",
+    SurfaceRoughnessMap = "rbxassetid://115560145086368",
+    SurfaceAlphaMode = Enum.AlphaMode.Overlay,
+    UseSurfaceAppearance = false,
+    Placement = "Back",
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+    ChromaFace = Enum.NormalId.Back,
+},
+["Bauble"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://107813118898769",
+    TextureId = "rbxassetid://137012201908941",
+    Scale = Vector3.new(0.05000000074505806, 0.05000000074505806, 0.05000000074505806),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    SurfaceColorMap = "",
+    SurfaceMetalnessMap = "",
+    SurfaceNormalMap = "",
+    SurfaceRoughnessMap = "",
+    SurfaceAlphaMode = Enum.AlphaMode.Overlay,
+    UseSurfaceAppearance = false,
+    Placement = "WaistRight",
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+    ChromaFace = Enum.NormalId.Back,
+},
+["Heart Wand"] = {
+    Type = "Knife",
+    MeshId = "rbxassetid://77738838473091",
+    TextureId = "rbxassetid://76246633927299",
+    Scale = Vector3.new(0.07, 0.07, 0.07),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.5607843399047852, 0.13333334028720856, 0.13333334028720856),
+    Material = Enum.Material.Brick,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    SurfaceColorMap = "rbxassetid://76246633927299",
+    SurfaceMetalnessMap = "",
+	    Placement = "WaistLeft",
+    SurfaceNormalMap = "",
+    SurfaceRoughnessMap = "",
+    SurfaceAlphaMode = Enum.AlphaMode.Overlay,
+    AttachmentPosition = Vector3.new(0, 0, 0),
+    AttachmentOrientation = Vector3.new(-0, 0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(0, 1, 0),
+    Chroma = false,
+    ChromaTexture = "",
+    ChromaStaticLayer = "",
+    ChromaFace = Enum.NormalId.Back,
+},
+["Sunrise"] = {
+    Type = "Gun",
+    MeshId = "rbxassetid://109742397574153",
+    TextureId = "rbxassetid://71731808219690",
+    Scale = Vector3.new(0.04584595561027527, 0.04584595561027527, 0.04584595561027527),
+    Offset = Vector3.new(0, 0, 0),
+    Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
+    Material = Enum.Material.Plastic,
+    Transparency = 0,
+    Reflectance = 0,
+    VertexColor = Vector3.new(1, 1, 1),
+    SurfaceColorMap = "",
+    SurfaceMetalnessMap = "",
+    SurfaceNormalMap = "",
+    SurfaceRoughnessMap = "",
+    SurfaceAlphaMode = Enum.AlphaMode.Overlay,
+    AttachmentPosition = Vector3.new(0, -0.20000000298023224, 0.08990859985351562),
+    AttachmentOrientation = Vector3.new(-50.001827239990234, -0, 0),
+    AttachmentAxis = Vector3.new(1, 0, 0),
+    AttachmentSecondaryAxis = Vector3.new(-0, 0.6427633166313171, -0.7660649418830872),
+    Chroma = true,
+    ChromaTexture = "rbxassetid://122480499480858",
+    ChromaStaticLayer = "",
+    ChromaFace = Enum.NormalId.Left,
 },
 }
+
 local function getPlacementAttachment(character, placement)
     if placement == "Back" then
         return character:FindFirstChild("UpperTorso")
@@ -1024,14 +1131,7 @@ local function getDisplayRefNameForWeapon(itemId, entry)
 end
 
 local function entryUsesSurfaceAppearance(entry)
-    return entry
-        and (
-            entry.SurfaceColorMap
-            or entry.SurfaceMetalnessMap
-            or entry.SurfaceNormalMap
-            or entry.SurfaceRoughnessMap
-            or entry.SurfaceAlphaMode
-        )
+    return entry and entry.UseSurfaceAppearance == true
 end
 
 local function getDefaultPlacementForEntry(entry)
@@ -1116,6 +1216,161 @@ local function createMeshPartDisplayForSurfaceEntry(character, ref, oldDisplay, 
     return replacement
 end
 
+local function createSpecialMeshDisplayForForcedEntry(character, ref, oldDisplay, entry)
+    if not entry or entry.UseSurfaceAppearance ~= false or not oldDisplay:IsA("MeshPart") then
+        return oldDisplay
+    end
+
+    local oldAttachment1 = getExistingConstraintAttachment1(oldDisplay)
+    local replacement = Instance.new("Part")
+    replacement.Name = oldDisplay.Name
+    replacement.CFrame = oldDisplay.CFrame
+    replacement.Size = Vector3.new(1, 1, 1)
+    replacement.Anchored = false
+    replacement.CanCollide = false
+    replacement.Massless = true
+    replacement.Color = oldDisplay.Color
+    replacement.Material = oldDisplay.Material
+    replacement.Transparency = oldDisplay.Transparency
+    replacement.Reflectance = oldDisplay.Reflectance
+    replacement.Parent = oldDisplay.Parent
+
+    local mesh = Instance.new("SpecialMesh")
+    mesh.MeshType = Enum.MeshType.FileMesh
+    mesh.MeshId = entry.MeshId or oldDisplay.MeshId
+    mesh.TextureId = entry.TextureId or oldDisplay.TextureID
+    mesh.Scale = entry.Scale or Vector3.new(1, 1, 1)
+    mesh.Offset = entry.Offset or Vector3.new(0, 0, 0)
+    mesh.VertexColor = entry.VertexColor or Vector3.new(1, 1, 1)
+    mesh.Parent = replacement
+
+    local attachment = Instance.new("Attachment")
+    attachment.Name = "CustomAttachment"
+    attachment.Position = entry.AttachmentPosition or Vector3.new(0, 0, 0)
+    attachment.Orientation = entry.AttachmentOrientation or Vector3.new(0, 0, 0)
+    attachment.Axis = entry.AttachmentAxis or Vector3.new(1, 0, 0)
+    attachment.SecondaryAxis = entry.AttachmentSecondaryAxis or Vector3.new(0, 1, 0)
+    attachment.Parent = replacement
+
+    local targetAttachment = oldAttachment1 or getPlacementAttachment(character, getDefaultPlacementForEntry(entry))
+    if targetAttachment then
+        local constraint = Instance.new("RigidConstraint")
+        constraint.Attachment0 = attachment
+        constraint.Attachment1 = targetAttachment
+        constraint.Parent = replacement
+    else
+        warn("[Carti Hub] Could not attach forced SpecialMesh display.")
+    end
+
+    ref.Value = replacement
+    stopChromaLoop(oldDisplay)
+    oldDisplay:Destroy()
+
+    return replacement
+end
+
+local function cleanupPreviousWeaponDisplay(refName, currentDisplay, character)
+    local previousDisplay = lastAppliedWeaponDisplays[refName]
+
+    if not previousDisplay or previousDisplay == currentDisplay or not previousDisplay.Parent then
+        return
+    end
+
+    if character and previousDisplay:IsDescendantOf(character) then
+        stopChromaLoop(previousDisplay)
+        previousDisplay:Destroy()
+    end
+
+    lastAppliedWeaponDisplays[refName] = nil
+    lastAppliedWeaponVisuals[refName] = nil
+end
+
+local function shouldCloneVisualChild(instance)
+    return instance:IsA("Light")
+        or instance:IsA("ParticleEmitter")
+        or instance:IsA("Beam")
+        or instance:IsA("Trail")
+        or instance:IsA("Fire")
+        or instance:IsA("Smoke")
+        or instance:IsA("Sparkles")
+        or instance:IsA("Highlight")
+        or instance:IsA("Decal")
+        or instance:IsA("Texture")
+end
+
+local function containsCloneableVisual(instance)
+    if shouldCloneVisualChild(instance) then
+        return true
+    end
+
+    for _, descendant in ipairs(instance:GetDescendants()) do
+        if shouldCloneVisualChild(descendant) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function stripUnsafeCloneDescendants(instance)
+    for _, descendant in ipairs(instance:GetDescendants()) do
+        if descendant:IsA("Script")
+            or descendant:IsA("LocalScript")
+            or descendant:IsA("ModuleScript")
+            or descendant:IsA("RigidConstraint")
+            or descendant:IsA("Weld")
+            or descendant:IsA("WeldConstraint")
+            or descendant:IsA("Motor6D")
+            or descendant:IsA("SpecialMesh")
+            or descendant:IsA("SurfaceAppearance") then
+            descendant:Destroy()
+        end
+    end
+end
+
+local function markClonedVisualTree(instance)
+    instance:SetAttribute("CartiHubClonedVisual", true)
+
+    for _, descendant in ipairs(instance:GetDescendants()) do
+        descendant:SetAttribute("CartiHubClonedVisual", true)
+    end
+end
+
+local function clearClonedVisualChildren(display)
+    for _, descendant in ipairs(display:GetDescendants()) do
+        if descendant:GetAttribute("CartiHubClonedVisual") then
+            descendant:Destroy()
+        end
+    end
+end
+
+local function cloneVisualChildrenFromPlayer(display, refName, sourcePlayerName)
+    if not sourcePlayerName or sourcePlayerName == "" then
+        return
+    end
+
+    local sourcePlayer = Players:FindFirstChild(sourcePlayerName)
+    local sourceCharacter = sourcePlayer and sourcePlayer.Character
+    local sourceRef = sourceCharacter and sourceCharacter:FindFirstChild(refName)
+    local sourceDisplay = sourceRef and sourceRef.Value
+
+    if not sourceDisplay then
+        warn("[Carti Hub] Visual child source display missing:", tostring(sourcePlayerName), refName)
+        return
+    end
+
+    clearClonedVisualChildren(display)
+
+    for _, sourceChild in ipairs(sourceDisplay:GetChildren()) do
+        if containsCloneableVisual(sourceChild) then
+            local clone = sourceChild:Clone()
+            stripUnsafeCloneDescendants(clone)
+            markClonedVisualTree(clone)
+            clone.Parent = display
+        end
+    end
+end
+
 local function applyWeaponVisual(itemId)
     local entry = getWeaponVisualEntry(itemId)
     if not entry then
@@ -1135,6 +1390,9 @@ local function applyWeaponVisual(itemId)
         return false
     end
 
+    cleanupPreviousWeaponDisplay(refName, display, char)
+
+    display = createSpecialMeshDisplayForForcedEntry(char, ref, display, entry)
     display = createMeshPartDisplayForSurfaceEntry(char, ref, display, entry)
     applyWeaponPlacement(char, display, entry)
 
@@ -1250,6 +1508,8 @@ local function applyWeaponVisual(itemId)
     else
         stopChromaLoop(display)
     end
+
+    cloneVisualChildrenFromPlayer(display, refName, entry.CloneVisualChildrenFromPlayer)
 
     lastAppliedWeaponVisuals[refName] = visualKey
     lastAppliedWeaponDisplays[refName] = display
@@ -1705,7 +1965,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 50)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Carti Hub"
+Title.Text = "t.me/cartiscripts"
 Title.TextColor3 = Color3.fromRGB(255, 235, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 22
@@ -1739,7 +1999,7 @@ TabLayout.Parent = TabContainer
 
 local function CreateTabBtn(text, order)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.23, -4, 1, 0)
+    btn.Size = UDim2.new(0.19, -4, 1, 0)
     btn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 240, 255)
@@ -1884,11 +2144,13 @@ end
 
 local SpawnerTabBtn = CreateTabBtn("Spawner", 1)
 local TradeTabBtn = CreateTabBtn("Trade", 2)
-local SettingsTabBtn = CreateTabBtn("Settings", 3)
-local KeybindsTabBtn = CreateTabBtn("Keys", 4)
+UpgradingTabBtn = CreateTabBtn("Upgrading", 3)
+local SettingsTabBtn = CreateTabBtn("Settings", 4)
+local KeybindsTabBtn = CreateTabBtn("Keys", 5)
 
 local SpawnerFrame = CreateTabFrame()
 local TradeFrame = CreateTabFrame()
+UpgradingFrame = CreateTabFrame()
 local SettingsFrame = CreateTabFrame()
 local KeybindsFrame = CreateTabFrame()
 SpawnerFrame.Visible = true
@@ -2880,6 +3142,159 @@ OfferSpawnerBtn.MouseButton1Click:Connect(function()
     OfferSpawnerGuiFrame.Visible = not OfferSpawnerGuiFrame.Visible
 end)
 
+CartiHubSelectedUpgradePlayerName = nil
+CartiHubUpgradePlayerDropdownBtn = CreateBtn(UpgradingFrame, "SELECT PLAYER: NONE")
+CartiHubUpgradePlayerListFrame = Instance.new("ScrollingFrame")
+CartiHubUpgradePlayerListFrame.Size = UDim2.new(1, 0, 0, 180)
+CartiHubUpgradePlayerListFrame.BackgroundColor3 = Color3.fromRGB(55, 22, 95)
+CartiHubUpgradePlayerListFrame.BorderSizePixel = 0
+CartiHubUpgradePlayerListFrame.ScrollBarThickness = 4
+CartiHubUpgradePlayerListFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+CartiHubUpgradePlayerListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+CartiHubUpgradePlayerListFrame.ClipsDescendants = true
+CartiHubUpgradePlayerListFrame.Parent = UpgradingFrame
+Instance.new("UICorner", CartiHubUpgradePlayerListFrame).CornerRadius = UDim.new(0, 8)
+
+CartiHubUpgradePlayerListPadding = Instance.new("UIPadding")
+CartiHubUpgradePlayerListPadding.PaddingTop = UDim.new(0, 6)
+CartiHubUpgradePlayerListPadding.PaddingBottom = UDim.new(0, 6)
+CartiHubUpgradePlayerListPadding.PaddingLeft = UDim.new(0, 6)
+CartiHubUpgradePlayerListPadding.PaddingRight = UDim.new(0, 6)
+CartiHubUpgradePlayerListPadding.Parent = CartiHubUpgradePlayerListFrame
+
+CartiHubUpgradePlayerListLayout = Instance.new("UIListLayout")
+CartiHubUpgradePlayerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+CartiHubUpgradePlayerListLayout.Padding = UDim.new(0, 5)
+CartiHubUpgradePlayerListLayout.Parent = CartiHubUpgradePlayerListFrame
+
+CartiHubUpgradePlayerListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    CartiHubUpgradePlayerListFrame.CanvasSize = UDim2.new(
+        0,
+        0,
+        0,
+        CartiHubUpgradePlayerListLayout.AbsoluteContentSize.Y + 12
+    )
+end)
+
+CartiHubLaunchUpgradeTradeBtn = CreateBtn(UpgradingFrame, "LAUNCH FAKE TRADE")
+
+function CartiHubSetSelectedUpgradePlayer(username)
+    CartiHubSelectedUpgradePlayerName = username
+    CartiHubUpgradePlayerDropdownBtn.Text = username and ("SELECT PLAYER: " .. username) or "SELECT PLAYER: NONE"
+end
+
+function CartiHubRefreshUpgradePlayerDropdown()
+    if not CartiHubUpgradePlayerListFrame or not CartiHubUpgradePlayerListFrame.Parent then
+        return
+    end
+
+    local selectedStillHere = CartiHubSelectedUpgradePlayerName == nil
+
+    for _, child in ipairs(CartiHubUpgradePlayerListFrame:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            if player.Name == CartiHubSelectedUpgradePlayerName then
+                selectedStillHere = true
+            end
+
+            local playerButton = Instance.new("TextButton")
+            playerButton.Size = UDim2.new(1, 0, 0, 30)
+            playerButton.BackgroundColor3 = player.Name == CartiHubSelectedUpgradePlayerName
+                and BUTTON_HOVER_COLOR
+                or Color3.fromRGB(70, 30, 120)
+            playerButton.BorderSizePixel = 0
+            playerButton.Text = player.Name
+            playerButton.TextColor3 = Color3.fromRGB(255, 245, 255)
+            playerButton.Font = Enum.Font.GothamBold
+            playerButton.TextSize = 13
+            playerButton.Parent = CartiHubUpgradePlayerListFrame
+            Instance.new("UICorner", playerButton).CornerRadius = UDim.new(0, 7)
+
+            playerButton.MouseButton1Click:Connect(function()
+                CartiHubSetSelectedUpgradePlayer(player.Name)
+                CartiHubRefreshUpgradePlayerDropdown()
+            end)
+        end
+    end
+
+    if not selectedStillHere then
+        CartiHubSetSelectedUpgradePlayer(nil)
+    end
+
+    CartiHubUpgradePlayerListFrame.CanvasSize = UDim2.new(
+        0,
+        0,
+        0,
+        CartiHubUpgradePlayerListLayout.AbsoluteContentSize.Y + 12
+    )
+end
+
+CartiHubUpgradePlayerDropdownBtn.MouseButton1Click:Connect(CartiHubRefreshUpgradePlayerDropdown)
+
+CartiHubAutoSelectLastTradedEnabled = false
+CartiHubAutoSelectLastTradedBtn = CreateBtn(UpgradingFrame, "AUTO SELECT LAST TRADED: OFF")
+
+function CartiHubSetAutoSelectLastTraded(enabled)
+    CartiHubAutoSelectLastTradedEnabled = enabled == true
+    CartiHubAutoSelectLastTradedBtn.Text = CartiHubAutoSelectLastTradedEnabled
+        and "AUTO SELECT LAST TRADED: ON"
+        or "AUTO SELECT LAST TRADED: OFF"
+    CartiHubAutoSelectLastTradedBtn.BackgroundColor3 = CartiHubAutoSelectLastTradedEnabled
+        and BUTTON_HOVER_COLOR
+        or BUTTON_COLOR
+
+    if CartiHubAutoSelectLastTradedEnabled and _G.CartiHubLastTradedPlayerName then
+        CartiHubTryAutoSelectLastTraded(_G.CartiHubLastTradedPlayerName)
+    end
+end
+
+function CartiHubTryAutoSelectLastTraded(username)
+    if not CartiHubAutoSelectLastTradedEnabled or not username then
+        return false
+    end
+
+    local player = Players:FindFirstChild(username)
+    if not player or player == localPlayer then
+        return false
+    end
+
+    CartiHubSetSelectedUpgradePlayer(player.Name)
+    CartiHubRefreshUpgradePlayerDropdown()
+    return true
+end
+
+CartiHubAutoSelectLastTradedBtn.MouseButton1Click:Connect(function()
+    CartiHubSetAutoSelectLastTraded(not CartiHubAutoSelectLastTradedEnabled)
+end)
+
+CartiHubLaunchUpgradeTradeBtn.MouseButton1Click:Connect(function()
+    if not CartiHubSelectedUpgradePlayerName then
+        CartiHubLaunchUpgradeTradeBtn.Text = "SELECT A PLAYER FIRST"
+        task.delay(2, function()
+            CartiHubLaunchUpgradeTradeBtn.Text = "LAUNCH FAKE TRADE"
+        end)
+        return
+    end
+
+    if CartiHubLaunchUpgradeFakeTrade then
+        CartiHubLaunchUpgradeFakeTrade(CartiHubSelectedUpgradePlayerName)
+    else
+        warn("[Carti Hub] Fake trade launcher is not ready yet.")
+    end
+end)
+
+task.spawn(function()
+    while SakaUI and SakaUI.Parent do
+        CartiHubRefreshUpgradePlayerDropdown()
+        task.wait(2)
+    end
+end)
+
 CreateBtn(SettingsFrame, "TRADE REQUEST: OFF")
 CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
 local friendJoinDelaySeconds = 30
@@ -3347,14 +3762,167 @@ local customUsers = {
 }
 
 local currentFakeTradeSenderName = "RandomPlayer"
+_G.CartiHubLastTradedPlayerName = _G.CartiHubLastTradedPlayerName
+_G.CartiHubPendingFakeTradeUsername = nil
+_G.CartiHubActiveFakeTradeUsername = nil
+_G.CartiHubFakeTradeActive = false
+_G.CartiHubDebugFakeTradeAccept = true
+_G.CartiHubLastAcceptTrace = nil
+warn("[Carti Hub][AcceptDebug] enabled")
 
 local function pickFakeTradeSenderName()
     currentFakeTradeSenderName = customUsers[math.random(1, #customUsers)] or "RandomPlayer"
     return currentFakeTradeSenderName
 end
 
+function CartiHubNormalizeTradeUsername(username)
+    username = tostring(username or "")
+    username = username:gsub("^%s*%(", ""):gsub("%)%s*$", "")
+    username = username:gsub("^@", "")
+    username = username:gsub("^%s+", ""):gsub("%s+$", "")
+
+    if username == "" or username == "RandomPlayer" then
+        return nil
+    end
+
+    return username
+end
+
+function CartiHubSetLastTradedPlayerName(username)
+    username = CartiHubNormalizeTradeUsername(username)
+
+    if username and username ~= localPlayer.Name then
+        _G.CartiHubLastTradedPlayerName = username
+
+        if CartiHubTryAutoSelectLastTraded then
+            CartiHubTryAutoSelectLastTraded(username)
+        end
+    end
+
+    return _G.CartiHubLastTradedPlayerName
+end
+
+function CartiHubGetPlayerNameFromTradeText(text)
+    text = CartiHubNormalizeTradeUsername(text)
+    if not text then
+        return nil
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            local playerName = tostring(player.Name)
+            local displayName = tostring(player.DisplayName or "")
+
+            if text == playerName
+                or text == displayName
+                or text:find(playerName, 1, true)
+                or (displayName ~= "" and text:find(displayName, 1, true)) then
+                return playerName
+            end
+        end
+    end
+
+    return nil
+end
+
+function CartiHubUpdateLastTradedPlayerFromGui()
+    if _G.CartiHubFakeTradeActive then
+        return _G.CartiHubLastTradedPlayerName
+    end
+
+    local gui = tradeModule.GUI
+    local tradeGui = gui and gui.TradeGUI
+    if not tradeGui or not tradeGui.Enabled then
+        return _G.CartiHubLastTradedPlayerName
+    end
+
+    for _, descendant in ipairs(tradeGui:GetDescendants()) do
+        if descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox") then
+            local playerName = CartiHubGetPlayerNameFromTradeText(descendant.Text)
+
+            if playerName and playerName ~= currentFakeTradeSenderName then
+                return CartiHubSetLastTradedPlayerName(playerName)
+            end
+        end
+    end
+
+    return _G.CartiHubLastTradedPlayerName
+end
+
+function CartiHubGetLastTradedPlayerName()
+    if _G.CartiHubLastTradedPlayerName then
+        return _G.CartiHubLastTradedPlayerName
+    end
+
+    local detectedName = CartiHubUpdateLastTradedPlayerFromGui()
+    if detectedName then
+        return detectedName
+    end
+
+    local gui = tradeModule.GUI
+    local theirOffer = gui and gui.TheirOffer
+    local usernameLabel = theirOffer and theirOffer:FindFirstChild("Username")
+
+    return usernameLabel and CartiHubSetLastTradedPlayerName(usernameLabel.Text) or nil
+end
+
+task.spawn(function()
+    while SakaUI == nil or SakaUI.Parent ~= nil do
+        local gui = tradeModule.GUI
+        local tradeGui = gui and gui.TradeGUI
+        local theirOffer = gui and gui.TheirOffer
+        local usernameLabel = theirOffer and theirOffer:FindFirstChild("Username")
+
+        if not _G.CartiHubFakeTradeActive and tradeGui and tradeGui.Enabled and usernameLabel then
+            local username = CartiHubGetPlayerNameFromTradeText(usernameLabel.Text)
+
+            if username and username ~= currentFakeTradeSenderName then
+                CartiHubSetLastTradedPlayerName(username)
+            end
+        end
+
+        if not _G.CartiHubFakeTradeActive and tradeGui and tradeGui.Enabled then
+            CartiHubUpdateLastTradedPlayerFromGui()
+        end
+
+        task.wait(0.5)
+    end
+end)
+
 local function getFakeTradeSenderName()
     return currentFakeTradeSenderName or "RandomPlayer"
+end
+
+function CartiHubApplyPendingFakeTradeUsername()
+    local pendingName = _G.CartiHubPendingFakeTradeUsername or _G.CartiHubActiveFakeTradeUsername
+    local gui = tradeModule.GUI
+    local theirOffer = gui and gui.TheirOffer
+    local usernameLabel = theirOffer and theirOffer:FindFirstChild("Username")
+
+    if not pendingName or not usernameLabel then
+        return
+    end
+
+    usernameLabel.Text = "(" .. tostring(pendingName) .. ")"
+end
+
+function CartiHubApplyPendingRequestUsername(moduleSenderName)
+    local pendingName = _G.CartiHubPendingFakeTradeUsername
+    local gui = tradeModule.GUI
+    local requestFrame = gui and gui.RequestFrame
+
+    if not pendingName or not moduleSenderName or not requestFrame then
+        return
+    end
+
+    for _, descendant in ipairs(requestFrame:GetDescendants()) do
+        if descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox") then
+            local text = tostring(descendant.Text or "")
+            if text:find(tostring(moduleSenderName), 1, true) then
+                descendant.Text = text:gsub(tostring(moduleSenderName), tostring(pendingName))
+            end
+        end
+    end
 end
 
 local function getFriendJoinThumbnail(username)
@@ -3574,6 +4142,7 @@ local redrawLocalTrade
 local resetAcceptUi
 local showIncomingTradeRequest
 local installRequestAcceptBridge
+local installOfferRemoveButtons
 local refreshMainInventoryQueued = false
 local requestAcceptConnection
 
@@ -3590,7 +4159,8 @@ local function cleanupOldOverlays()
                     or descendant.Name == "ClientPlaceholderTradeToggle"
                     or descendant.Name == "ClientPlaceholderTradeAcceptBridge"
                     or descendant.Name == "ClientPlaceholderTradeAcceptOverlay"
-                    or descendant.Name == "ClientPlaceholderTradeActionOverlay" then
+                    or descendant.Name == "ClientPlaceholderTradeActionOverlay"
+                    or descendant.Name == "CartiHubFakeTradeWatermark" then
                     descendant:Destroy()
                 end
             end
@@ -3721,6 +4291,140 @@ local function drawOfferSlots(offerFrame, offerList)
     end
 end
 
+function CartiHubEnsureFakeTradeWatermark()
+    local tradeGui = tradeModule.GUI and tradeModule.GUI.TradeGUI
+    local parent = tradeGui and (tradeGui:FindFirstChild("Container") or tradeGui)
+    if not parent then
+        return
+    end
+
+    local watermark = parent:FindFirstChild("CartiHubFakeTradeWatermark")
+    if not watermark then
+        watermark = Instance.new("TextLabel")
+        watermark.Name = "CartiHubFakeTradeWatermark"
+        watermark.BackgroundTransparency = 1
+        watermark.BorderSizePixel = 0
+        watermark.AnchorPoint = Vector2.new(1, 0)
+        watermark.Size = UDim2.new(0, 120, 0, 16)
+        watermark.Position = UDim2.new(1, -8, 0, 6)
+        watermark.Text = "t.me/cartiscripts"
+        watermark.TextColor3 = Color3.fromRGB(255, 255, 255)
+        watermark.TextTransparency = 0.7
+        watermark.Font = Enum.Font.Gotham
+        watermark.TextSize = 10
+        watermark.TextXAlignment = Enum.TextXAlignment.Right
+        watermark.TextYAlignment = Enum.TextYAlignment.Top
+        watermark.Parent = parent
+    end
+
+    watermark.Visible = _G.CartiHubFakeTradeActive == true
+    watermark.ZIndex = 10000
+end
+
+function CartiHubEnforceFakeTradeFrame()
+    if not _G.CartiHubFakeTradeActive or not tradeModule.GUI or not tradeModule.GUI.TradeGUI then
+        return
+    end
+
+    CartiHubEnsureFakeTradeWatermark()
+
+    if tradeModule.GUI.RequestFrame then
+        tradeModule.GUI.RequestFrame.Visible = false
+    end
+
+    if not tradeModule.GUI.TradeGUI.Enabled then
+        tradeModule.GUI.TradeGUI.Enabled = true
+    end
+
+    if tradeModule.GUI.TradeGUI:FindFirstChild("Container") then
+        tradeModule.GUI.TradeGUI.Container.Visible = true
+    end
+
+    if localAcceptMode == "Waiting" or localAcceptMode == "BothAccepted" then
+        return
+    end
+
+    drawOfferSlots(tradeModule.GUI.YourOffer, localOffer)
+    drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
+
+    if tradeModule.GUI.TheirOffer and tradeModule.GUI.TheirOffer:FindFirstChild("Username") then
+        tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+        CartiHubApplyPendingFakeTradeUsername()
+    end
+
+    if installOfferRemoveButtons then
+        installOfferRemoveButtons()
+    end
+
+    if localAcceptMode == "Accept" then
+        CartiHubWakeAcceptActionButton()
+    else
+        CartiHubSetAcceptContainerOverlayVisible(false)
+    end
+
+    CartiHubTraceFakeAcceptState("enforce")
+end
+
+function CartiHubQueueFakeTradeFrameRepair()
+    if not _G.CartiHubFakeTradeActive then
+        return
+    end
+
+    task.defer(CartiHubEnforceFakeTradeFrame)
+end
+
+function CartiHubDisconnectFakeTradeFrameGuardSignals()
+    for _, connection in ipairs(_G.CartiHubFakeTradeGuardConnections or {}) do
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+
+    _G.CartiHubFakeTradeGuardConnections = {}
+end
+
+function CartiHubConnectFakeTradeFrameGuardSignals()
+    CartiHubDisconnectFakeTradeFrameGuardSignals()
+
+    local gui = tradeModule.GUI
+    local tradeGui = gui and gui.TradeGUI
+    local requestFrame = gui and gui.RequestFrame
+
+    _G.CartiHubFakeTradeGuardConnections = {}
+
+    if tradeGui then
+        table.insert(_G.CartiHubFakeTradeGuardConnections, tradeGui:GetPropertyChangedSignal("Enabled"):Connect(CartiHubQueueFakeTradeFrameRepair))
+
+        if tradeGui:FindFirstChild("Container") then
+            table.insert(_G.CartiHubFakeTradeGuardConnections, tradeGui.Container:GetPropertyChangedSignal("Visible"):Connect(CartiHubQueueFakeTradeFrameRepair))
+        end
+    end
+
+    if requestFrame then
+        table.insert(_G.CartiHubFakeTradeGuardConnections, requestFrame:GetPropertyChangedSignal("Visible"):Connect(CartiHubQueueFakeTradeFrameRepair))
+    end
+end
+
+function CartiHubStartFakeTradeFrameGuard()
+    _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
+    local sequence = _G.CartiHubFakeTradeVisualSequence
+    CartiHubConnectFakeTradeFrameGuardSignals()
+
+    task.spawn(function()
+        while _G.CartiHubFakeTradeActive
+            and sequence == _G.CartiHubFakeTradeVisualSequence
+            and SakaUI
+            and SakaUI.Parent do
+            CartiHubEnforceFakeTradeFrame()
+            task.wait(0.08)
+        end
+
+        if sequence == _G.CartiHubFakeTradeVisualSequence then
+            CartiHubDisconnectFakeTradeFrameGuardSignals()
+        end
+    end)
+end
+
 local function setLocalAcceptState(mode)
     local actions = tradeModule.GUI.Actions
     local accept = actions and actions:FindFirstChild("Accept")
@@ -3742,6 +4446,10 @@ local function setLocalAcceptState(mode)
         accept.Cooldown.Visible = false
     end
 
+    if accept:FindFirstChild("AddItem") then
+        accept.AddItem.Visible = mode == "Cooldown"
+    end
+
     if tradeModule.GUI.YourOffer:FindFirstChild("Accepted") then
         tradeModule.GUI.YourOffer.Accepted.Visible = mode == "Waiting" or mode == "BothAccepted"
     end
@@ -3749,6 +4457,213 @@ local function setLocalAcceptState(mode)
     if tradeModule.GUI.TheirOffer:FindFirstChild("Accepted") then
         tradeModule.GUI.TheirOffer.Accepted.Visible = mode == "BothAccepted"
     end
+
+    CartiHubSetAcceptContainerOverlayVisible(mode == "Accept")
+end
+
+function CartiHubHandleFakeAcceptClick()
+    CartiHubTraceFakeAcceptState("accept_click")
+
+    if localAcceptMode == "Accept" and time() >= cooldownEndsAt then
+        localConfirmStartedAt = time()
+        setLocalAcceptState("Confirm")
+        CartiHubTraceFakeAcceptState("accept_to_confirm")
+    end
+end
+
+function CartiHubSetAcceptContainerOverlayVisible(visible)
+    local actions = tradeModule.GUI and tradeModule.GUI.Actions
+    local accept = actions and actions:FindFirstChild("Accept")
+    local overlay = accept and accept:FindFirstChild("ClientPlaceholderTradeActionOverlay")
+
+    if overlay and overlay:IsA("GuiObject") then
+        overlay.Visible = visible
+    end
+end
+
+function CartiHubTraceFakeAcceptState(reason)
+    if not _G.CartiHubDebugFakeTradeAccept then
+        return
+    end
+
+    local actions = tradeModule.GUI and tradeModule.GUI.Actions
+    local accept = actions and actions:FindFirstChild("Accept")
+    local actionButton = accept and accept:FindFirstChild("ActionButton")
+    local cooldown = accept and accept:FindFirstChild("Cooldown")
+    local confirm = accept and accept:FindFirstChild("Confirm")
+    local cancel = accept and accept:FindFirstChild("Cancel")
+    local addItem = accept and accept:FindFirstChild("AddItem")
+    local containerOverlay = accept and accept:FindFirstChild("ClientPlaceholderTradeActionOverlay")
+    local actionOverlay = actionButton and actionButton:FindFirstChild("ClientPlaceholderTradeActionOverlay")
+    local color = actionButton and actionButton:IsA("GuiObject") and actionButton.BackgroundColor3
+    local colorText = color and ("%d,%d,%d"):format(color.R * 255, color.G * 255, color.B * 255) or "nil"
+
+    local signature = table.concat({
+        tostring(reason),
+        tostring(localAcceptMode),
+        tostring(_G.CartiHubFakeTradeActive),
+        tostring(accept and accept.Visible),
+        tostring(actionButton and actionButton.Visible),
+        tostring(actionButton and actionButton:IsA("GuiButton") and actionButton.Active),
+        tostring(actionButton and actionButton:IsA("GuiButton") and actionButton.AutoButtonColor),
+        tostring(actionButton and actionButton:IsA("GuiObject") and actionButton.BackgroundTransparency),
+        colorText,
+        tostring(cooldown and cooldown.Visible),
+        tostring(confirm and confirm.Visible),
+        tostring(cancel and cancel.Visible),
+        tostring(addItem and addItem.Visible),
+        tostring(containerOverlay and containerOverlay.Visible),
+        tostring(actionOverlay and actionOverlay.Visible),
+    }, "|")
+
+    if signature == _G.CartiHubLastAcceptTrace then
+        return
+    end
+
+    _G.CartiHubLastAcceptTrace = signature
+    warn("[Carti Hub][AcceptDebug] " .. signature)
+end
+
+function CartiHubWakeAcceptActionButton()
+    local actions = tradeModule.GUI and tradeModule.GUI.Actions
+    local accept = actions and actions:FindFirstChild("Accept")
+    if not accept then
+        return
+    end
+
+    accept.Visible = true
+
+    if accept:FindFirstChild("Cooldown") and localAcceptMode ~= "Cooldown" then
+        accept.Cooldown.Visible = false
+    end
+
+    if accept:FindFirstChild("AddItem") and localAcceptMode ~= "Cooldown" then
+        accept.AddItem.Visible = false
+    end
+
+    if accept:FindFirstChild("Confirm") and localAcceptMode ~= "Confirm" then
+        accept.Confirm.Visible = false
+    end
+
+    if accept:FindFirstChild("Cancel") and localAcceptMode ~= "Waiting" and localAcceptMode ~= "BothAccepted" then
+        accept.Cancel.Visible = false
+    end
+
+    local actionButton = accept:FindFirstChild("ActionButton")
+    if actionButton and actionButton:IsA("GuiObject") then
+        actionButton.Visible = true
+        actionButton.ZIndex = math.max(actionButton.ZIndex, accept.ZIndex + 1)
+    end
+
+    if actionButton and actionButton:IsA("GuiButton") then
+        actionButton.Active = true
+        actionButton.Selectable = true
+        actionButton.AutoButtonColor = true
+    end
+
+    local containerOverlay = accept:FindFirstChild("ClientPlaceholderTradeActionOverlay")
+    if not containerOverlay then
+        containerOverlay = Instance.new("TextButton")
+        containerOverlay.Name = "ClientPlaceholderTradeActionOverlay"
+        containerOverlay.BackgroundTransparency = 1
+        containerOverlay.BorderSizePixel = 0
+        containerOverlay.Text = ""
+        containerOverlay.Size = UDim2.fromScale(1, 1)
+        containerOverlay.Position = UDim2.fromScale(0, 0)
+        containerOverlay.Parent = accept
+        containerOverlay.MouseButton1Click:Connect(CartiHubHandleFakeAcceptClick)
+    end
+
+    if containerOverlay:IsA("GuiObject") then
+        containerOverlay.Visible = localAcceptMode == "Accept"
+        containerOverlay.BackgroundTransparency = 1
+        containerOverlay.ZIndex = accept.ZIndex + 200
+        containerOverlay.Size = UDim2.fromScale(1, 1)
+        containerOverlay.Position = UDim2.fromScale(0, 0)
+    end
+
+    if containerOverlay:IsA("GuiButton") then
+        containerOverlay.Active = true
+        containerOverlay.Selectable = true
+        containerOverlay.AutoButtonColor = false
+    end
+
+    local overlay = actionButton and actionButton:FindFirstChild("ClientPlaceholderTradeActionOverlay")
+    if actionButton and not overlay then
+        overlay = Instance.new("TextButton")
+        overlay.Name = "ClientPlaceholderTradeActionOverlay"
+        overlay.BackgroundTransparency = 1
+        overlay.BorderSizePixel = 0
+        overlay.Text = ""
+        overlay.Size = UDim2.fromScale(1, 1)
+        overlay.Position = UDim2.fromScale(0, 0)
+        overlay.Parent = actionButton
+        overlay.MouseButton1Click:Connect(CartiHubHandleFakeAcceptClick)
+    end
+
+    if overlay and overlay:IsA("GuiObject") then
+        overlay.Visible = localAcceptMode == "Accept"
+        overlay.BackgroundTransparency = 1
+        overlay.ZIndex = actionButton.ZIndex + 100
+        overlay.Size = UDim2.fromScale(1, 1)
+        overlay.Position = UDim2.fromScale(0, 0)
+    end
+
+    if overlay and overlay:IsA("GuiButton") then
+        overlay.Active = true
+        overlay.Selectable = true
+        overlay.AutoButtonColor = false
+    end
+
+    CartiHubTraceFakeAcceptState("wake")
+end
+
+function CartiHubForceFakeAcceptReady()
+    if not _G.CartiHubFakeTradeActive then
+        return
+    end
+
+    localAcceptMode = "Accept"
+
+    local actions = tradeModule.GUI and tradeModule.GUI.Actions
+    local accept = actions and actions:FindFirstChild("Accept")
+
+    if accept then
+        accept.Visible = true
+
+        if accept:FindFirstChild("Cooldown") then
+            accept.Cooldown.Visible = false
+        end
+
+        if accept:FindFirstChild("AddItem") then
+            accept.AddItem.Visible = false
+        end
+
+        if accept:FindFirstChild("Confirm") then
+            accept.Confirm.Visible = false
+        end
+
+        if accept:FindFirstChild("Cancel") then
+            accept.Cancel.Visible = false
+        end
+    end
+
+    CartiHubWakeAcceptActionButton()
+    CartiHubSetAcceptContainerOverlayVisible(true)
+    CartiHubTraceFakeAcceptState("force_ready")
+end
+
+function CartiHubStabilizeFakeAcceptReady(sequence)
+    task.spawn(function()
+        for _ = 1, 8 do
+            if sequence ~= cooldownSequence or not _G.CartiHubFakeTradeActive or localAcceptMode ~= "Accept" then
+                return
+            end
+
+            CartiHubForceFakeAcceptReady()
+            task.wait(0.05)
+        end
+    end)
 end
 
 local function promptReceivedTheirOfferItems(offerList)
@@ -3798,6 +4713,12 @@ local function scheduleOtherSideAccept()
             end
 
             tradeGui.Enabled = false
+            _G.CartiHubFakeTradeActive = false
+            _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
+            CartiHubDisconnectFakeTradeFrameGuardSignals()
+            CartiHubEnsureFakeTradeWatermark()
+            _G.CartiHubPendingFakeTradeUsername = nil
+            _G.CartiHubActiveFakeTradeUsername = nil
             addTheirOfferToInventory(receivedItems)
             refreshMainInventoryItem()
             promptReceivedTheirOfferItems(receivedItems)
@@ -3807,7 +4728,7 @@ local function scheduleOtherSideAccept()
             resetAcceptUi()
             clearOfferSlots(tradeModule.GUI.YourOffer)
             clearOfferSlots(tradeModule.GUI.TheirOffer)
-            installRequestAcceptBridge()
+            CartiHubCleanupRequestAcceptBridge()
         end)
     end)
 end
@@ -3840,6 +4761,8 @@ local function startAcceptCooldown(seconds)
     end
 
     cooldown.Visible = true
+    CartiHubSetAcceptContainerOverlayVisible(false)
+    CartiHubTraceFakeAcceptState("cooldown_start")
 
     task.spawn(function()
         while sequence == cooldownSequence do
@@ -3856,8 +4779,9 @@ local function startAcceptCooldown(seconds)
         end
 
         if sequence == cooldownSequence then
-            cooldown.Visible = false
-            localAcceptMode = "Accept"
+            CartiHubTraceFakeAcceptState("cooldown_end_before_ready")
+            CartiHubForceFakeAcceptReady()
+            CartiHubStabilizeFakeAcceptReady(sequence)
         end
     end)
 end
@@ -3867,6 +4791,8 @@ resetAcceptUi = function()
     otherAcceptSequence += 1
     cooldownEndsAt = 0
     setLocalAcceptState("Accept")
+    CartiHubWakeAcceptActionButton()
+    task.defer(CartiHubWakeAcceptActionButton)
 
     local actions = tradeModule.GUI.Actions
     if actions and actions:FindFirstChild("oldconfirm") then
@@ -3874,7 +4800,7 @@ resetAcceptUi = function()
     end
 end
 
-local function installOfferRemoveButtons()
+installOfferRemoveButtons = function()
     local yourOffer = tradeModule.GUI.YourOffer
     if not yourOffer or not yourOffer:FindFirstChild("Container") then
         return
@@ -3919,6 +4845,7 @@ redrawLocalTrade = function()
     drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    CartiHubApplyPendingFakeTradeUsername()
     installOfferRemoveButtons()
 end
 
@@ -4020,6 +4947,7 @@ local function addRandomGodlyToTheirOffer()
     drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    CartiHubApplyPendingFakeTradeUsername()
     startAcceptCooldown(5)
 
     print(("[IncomingTradePopup] Added random godly to their offer: %s/%s"):format(
@@ -4053,6 +4981,7 @@ addSpecificItemToTheirOffer = function(itemId, itemType)
     drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    CartiHubApplyPendingFakeTradeUsername()
     startAcceptCooldown(5)
 
     print(("[IncomingTradePopup] Added offer-spawner item: %s/%s"):format(tostring(itemType), tostring(itemId)))
@@ -4073,6 +5002,7 @@ removeLastTheirOffer = function()
     drawOfferSlots(tradeModule.GUI.TheirOffer, theirOffer)
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    CartiHubApplyPendingFakeTradeUsername()
     startAcceptCooldown(5)
 
     print(("[IncomingTradePopup] Removed their last offered item: %s/%s"):format(
@@ -4138,12 +5068,8 @@ local function installTradeActionButtons()
     local decline = actions:FindFirstChild("Decline")
 
     if accept then
-        addActionOverlay(accept:FindFirstChild("ActionButton"), function()
-            if localAcceptMode == "Accept" and time() >= cooldownEndsAt then
-                localConfirmStartedAt = time()
-                setLocalAcceptState("Confirm")
-            end
-        end)
+        addActionOverlay(accept, CartiHubHandleFakeAcceptClick)
+        addActionOverlay(accept:FindFirstChild("ActionButton"), CartiHubHandleFakeAcceptClick)
 
         local confirmButton = accept:FindFirstChild("Confirm")
             and accept.Confirm:FindFirstChild("ActionButton")
@@ -4162,6 +5088,12 @@ local function installTradeActionButtons()
     if decline then
         addActionOverlay(decline:FindFirstChild("ActionButton"), function()
             tradeModule.GUI.TradeGUI.Enabled = false
+            _G.CartiHubFakeTradeActive = false
+            _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
+            CartiHubDisconnectFakeTradeFrameGuardSignals()
+            CartiHubEnsureFakeTradeWatermark()
+            _G.CartiHubPendingFakeTradeUsername = nil
+            _G.CartiHubActiveFakeTradeUsername = nil
             tradeModule.TradeInventory = nil
             restoreLocalOfferToInventory()
             table.clear(theirOffer)
@@ -4198,6 +5130,8 @@ local function openTradeFrameFromAccept()
     local tradeGui = tradeModule.GUI.TradeGUI
     local tradeContainer = tradeGui.Container
 
+    _G.CartiHubFakeTradeActive = true
+    CartiHubStartFakeTradeFrameGuard()
     restoreLocalOfferToInventory()
     table.clear(theirOffer)
     resetAcceptUi()
@@ -4224,11 +5158,17 @@ local function openTradeFrameFromAccept()
     tradeModule.ConnectOfferButtons(tradeModule.TradeInventory)
     redrawLocalTrade()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
+    CartiHubApplyPendingFakeTradeUsername()
+    _G.CartiHubPendingFakeTradeUsername = nil
     tradeModule.GUI.RequestFrame.Visible = false
     tradeGui.Enabled = true
     task.defer(installInventoryToggleButtons)
     task.delay(0.5, installInventoryToggleButtons)
     installTradeActionButtons()
+    CartiHubWakeAcceptActionButton()
+    CartiHubEnforceFakeTradeFrame()
+    task.defer(CartiHubWakeAcceptActionButton)
+    task.defer(CartiHubEnforceFakeTradeFrame)
 end
 
 local function getAcceptButton()
@@ -4240,16 +5180,15 @@ end
 
 cleanupOldOverlays()
 
-installRequestAcceptBridge = function()
-    local acceptButton = getAcceptButton()
-    if not acceptButton then
-        warn("[IncomingTradePopup] Accept button missing.")
-        return
-    end
-
+function CartiHubCleanupRequestAcceptBridge()
     if requestAcceptConnection then
         requestAcceptConnection:Disconnect()
         requestAcceptConnection = nil
+    end
+
+    local acceptButton = getAcceptButton()
+    if not acceptButton then
+        return
     end
 
     local oldBridge = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptBridge")
@@ -4260,6 +5199,16 @@ installRequestAcceptBridge = function()
     local oldOverlay = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptOverlay")
     if oldOverlay then
         oldOverlay:Destroy()
+    end
+end
+
+installRequestAcceptBridge = function()
+    CartiHubCleanupRequestAcceptBridge()
+
+    local acceptButton = getAcceptButton()
+    if not acceptButton then
+        warn("[IncomingTradePopup] Accept button missing.")
+        return
     end
 
     local opened = false
@@ -4283,16 +5232,7 @@ installRequestAcceptBridge = function()
         end
 
         opened = true
-        bridge:Destroy()
-
-        if overlay.Parent then
-            overlay:Destroy()
-        end
-
-        if requestAcceptConnection then
-            requestAcceptConnection:Disconnect()
-            requestAcceptConnection = nil
-        end
+        CartiHubCleanupRequestAcceptBridge()
 
         task.defer(openTradeFrameFromAccept)
     end
@@ -4301,30 +5241,67 @@ installRequestAcceptBridge = function()
     requestAcceptConnection = acceptButton.MouseButton1Click:Connect(function()
         task.defer(openOnce)
     end)
+
+    task.delay(20, function()
+        if opened then
+            return
+        end
+
+        if bridge.Parent or overlay.Parent then
+            CartiHubCleanupRequestAcceptBridge()
+        end
+    end)
 end
 
 showIncomingTradeRequest = function()
-    local senderName = pickFakeTradeSenderName()
+    local moduleSenderName = pickFakeTradeSenderName()
     installRequestAcceptBridge()
     tradeModule.UpdateTradeRequestWindow("ReceivingRequest", {
         Sender = {
-            Name = senderName,
+            Name = moduleSenderName,
         },
     })
+
+    if _G.CartiHubPendingFakeTradeUsername then
+        CartiHubApplyPendingRequestUsername(moduleSenderName)
+        task.defer(function()
+            CartiHubApplyPendingRequestUsername(moduleSenderName)
+        end)
+        task.delay(0.25, function()
+            CartiHubApplyPendingRequestUsername(moduleSenderName)
+        end)
+    end
 end
 
-StartTradeBtn.MouseButton1Click:Connect(showIncomingTradeRequest)
+function CartiHubLaunchUpgradeFakeTrade(username)
+    if not username or username == "" then
+        return false
+    end
+
+    _G.CartiHubPendingFakeTradeUsername = username
+    _G.CartiHubActiveFakeTradeUsername = username
+    showIncomingTradeRequest()
+    return true
+end
+
+StartTradeBtn.MouseButton1Click:Connect(function()
+    _G.CartiHubPendingFakeTradeUsername = nil
+    _G.CartiHubActiveFakeTradeUsername = nil
+    showIncomingTradeRequest()
+end)
 AddRandomBtn.MouseButton1Click:Connect(addRandomGodlyToTheirOffer)
 RemoveLastBtn.MouseButton1Click:Connect(removeLastTheirOffer)
 
 local function SwitchTab(activeBtn, activeFrame)
     SpawnerFrame.Visible = false
     TradeFrame.Visible = false
+    UpgradingFrame.Visible = false
     SettingsFrame.Visible = false
     KeybindsFrame.Visible = false
 
     SpawnerTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
     TradeTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    UpgradingTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
     SettingsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
     KeybindsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
 
@@ -4338,6 +5315,11 @@ end)
 
 TradeTabBtn.MouseButton1Click:Connect(function()
     SwitchTab(TradeTabBtn, TradeFrame)
+end)
+
+UpgradingTabBtn.MouseButton1Click:Connect(function()
+    CartiHubRefreshUpgradePlayerDropdown()
+    SwitchTab(UpgradingTabBtn, UpgradingFrame)
 end)
 
 SettingsTabBtn.MouseButton1Click:Connect(function()
@@ -4358,6 +5340,8 @@ _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect
     end
 
     if input.KeyCode == Enum.KeyCode.Z then
+        _G.CartiHubPendingFakeTradeUsername = nil
+        _G.CartiHubActiveFakeTradeUsername = nil
         showIncomingTradeRequest()
     elseif input.KeyCode == Enum.KeyCode.F then
         showRandomFakeFriendJoinNotification()
@@ -4374,7 +5358,22 @@ _G.CartiHubSpawnWeaponByIdNoPopup = spawnWeaponByIdNoPopup
 _G.CartiHubSpawnAllGodlies = spawnAllGodlyWeapons
 _G.CartiHubSpawnAllChromas = spawnAllChromaWeapons
 _G.CartiHubSpawnAllAncients = spawnAllAncientWeapons
-_G.CartiHubStartTradeRequest = showIncomingTradeRequest
+_G.CartiHubStartTradeRequest = function()
+    _G.CartiHubPendingFakeTradeUsername = nil
+    _G.CartiHubActiveFakeTradeUsername = nil
+    showIncomingTradeRequest()
+end
+_G.CartiHubLaunchUpgradeFakeTrade = CartiHubLaunchUpgradeFakeTrade
+_G.CartiHubSetAutoSelectLastTraded = CartiHubSetAutoSelectLastTraded
+_G.CartiHubSetAcceptDebug = function(enabled)
+    _G.CartiHubDebugFakeTradeAccept = enabled == true
+    _G.CartiHubLastAcceptTrace = nil
+    CartiHubTraceFakeAcceptState("manual_toggle")
+end
+_G.CartiHubDumpAcceptState = function()
+    _G.CartiHubLastAcceptTrace = nil
+    CartiHubTraceFakeAcceptState("manual_dump")
+end
 _G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
 _G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
 _G.CartiHubPopulateWeaponSpawner = populateWeaponSpawner
