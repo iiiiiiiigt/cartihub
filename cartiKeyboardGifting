@@ -3,6 +3,7 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local VirtualInputManager = nil
 pcall(function()
@@ -527,14 +528,14 @@ local function showFoundationOverlayPromptReplica()
     headerPrice.Name = "RobuxPrice"
     headerPrice.AnchorPoint = Vector2.new(1, 0)
     headerPrice.Size = UDim2.fromOffset(72, 28)
-    headerPrice.Position = UDim2.new(1, -36, 0, 16)
+    headerPrice.Position = UDim2.new(1, -36, 0, 17)
     headerPrice.BackgroundTransparency = 1
     headerPrice.BorderSizePixel = 0
     headerPrice.Parent = header
 
     local headerRobuxIcon = makeText(headerPrice, "Icon", '<font family="rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json" weight="400">robux</font>', UDim2.fromOffset(21, 21), UDim2.fromOffset(0, 3), 20, textColor, regularFont)
     headerRobuxIcon.TextXAlignment = Enum.TextXAlignment.Center
-    local headerRobuxAmount = makeText(headerPrice, "Amount", tostring(localRobuxAmount), UDim2.new(1, -25, 1, 0), UDim2.fromOffset(21, -1), 14, textColor, boldFont)
+    local headerRobuxAmount = makeText(headerPrice, "Amount", tostring(localRobuxAmount), UDim2.new(1, -25, 1, 0), UDim2.fromOffset(21, -1), 15, textColor, boldFont)
     headerRobuxAmount.TextXAlignment = Enum.TextXAlignment.Left
 
     local productContent = Instance.new("Frame")
@@ -2160,8 +2161,8 @@ configGui.Parent = parent
 
 local panel = Instance.new("Frame")
 panel.Name = "Panel"
-panel.Size = UDim2.fromOffset(220, 132)
-panel.Position = UDim2.new(0, 20, 0.5, -66)
+panel.Size = UDim2.fromOffset(220, 270)
+panel.Position = UDim2.new(0, 20, 0.5, -135)
 panel.BackgroundColor3 = Color3.fromRGB(34, 18, 52)
 panel.BorderSizePixel = 0
 panel.Active = true
@@ -2180,7 +2181,7 @@ panelTitle.Name = "Title"
 panelTitle.Size = UDim2.new(1, -18, 0, 24)
 panelTitle.Position = UDim2.fromOffset(9, 8)
 panelTitle.BackgroundTransparency = 1
-panelTitle.Text = "Enter how much robuxu want"
+panelTitle.Text = "t.me/cartiscripts"
 panelTitle.TextColor3 = Color3.fromRGB(255, 245, 255)
 panelTitle.Font = Enum.Font.GothamBold
 panelTitle.TextSize = 14
@@ -2215,6 +2216,185 @@ applyButton.Font = Enum.Font.GothamBold
 applyButton.TextSize = 13
 applyButton.Parent = panel
 makeCorner(applyButton, 8)
+
+local tagsLabel = Instance.new("TextLabel")
+tagsLabel.Name = "TagsLabel"
+tagsLabel.Size = UDim2.new(1, -18, 0, 22)
+tagsLabel.Position = UDim2.fromOffset(9, 132)
+tagsLabel.BackgroundTransparency = 1
+tagsLabel.Text = "Tags"
+tagsLabel.TextColor3 = Color3.fromRGB(255, 245, 255)
+tagsLabel.Font = Enum.Font.GothamBold
+tagsLabel.TextSize = 13
+tagsLabel.TextXAlignment = Enum.TextXAlignment.Left
+tagsLabel.Parent = panel
+
+local tagsFrame = Instance.new("Frame")
+tagsFrame.Name = "Tags"
+tagsFrame.Size = UDim2.new(1, -18, 0, 118)
+tagsFrame.Position = UDim2.fromOffset(9, 151)
+tagsFrame.BackgroundTransparency = 1
+tagsFrame.BorderSizePixel = 0
+tagsFrame.Parent = panel
+
+local tagsLayout = Instance.new("UIGridLayout")
+tagsLayout.CellSize = UDim2.new(0.5, -4, 0, 52)
+tagsLayout.CellPadding = UDim2.fromOffset(8, 8)
+tagsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tagsLayout.Parent = tagsFrame
+
+local selectedTags = {}
+local activeGroupTagKey = nil
+local tagButtons = {}
+local groupTagDisplayNames = {
+    ContentCreator = "Content Creator",
+    MusicProducer = "Music Producer",
+    Scripter = "Scripter",
+    Tester = "Tester",
+}
+
+local function colorFromGroupTagConfig(value)
+    if typeof(value) == "Color3" then
+        return value
+    end
+
+    local red, green, blue = tostring(value or ""):match("^%s*([%d%.]+)%s*,%s*([%d%.]+)%s*,%s*([%d%.]+)%s*$")
+    if red and green and blue then
+        return Color3.new(tonumber(red), tonumber(green), tonumber(blue))
+    end
+
+    return Color3.fromRGB(255, 255, 255)
+end
+
+local function colorToHex(color)
+    return ("#%02X%02X%02X"):format(
+        math.round(color.R * 255),
+        math.round(color.G * 255),
+        math.round(color.B * 255)
+    )
+end
+
+local function getGroupTagConfig(tagKey)
+    local featureConfigs = ReplicatedStorage:FindFirstChild("FeatureConfigs")
+    local groupTags = featureConfigs and featureConfigs:FindFirstChild("GroupTags")
+    local configs = groupTags and groupTags:FindFirstChild("Configs")
+    local configModule = configs and configs:FindFirstChild(tagKey)
+
+    if not configModule or not configModule:IsA("ModuleScript") then
+        warn("[FoundationOverlay] Group tag config missing: " .. tostring(tagKey))
+        return nil
+    end
+
+    local ok, config = pcall(require, configModule)
+    if not ok or type(config) ~= "table" then
+        warn("[FoundationOverlay] Could not load group tag config: " .. tostring(tagKey))
+        return nil
+    end
+
+    return config
+end
+
+local function clearLocalGroupTag()
+    local character = localPlayer.Character
+    local head = character and character:FindFirstChild("Head")
+    local oldTag = (head and head:FindFirstChild("CartiHubGroupTag"))
+        or (character and character:FindFirstChild("CartiHubGroupTag"))
+    if oldTag then
+        oldTag:Destroy()
+    end
+end
+
+local function applyLocalGroupTag(tagKey)
+    local config = getGroupTagConfig(tagKey)
+    if not config then
+        return false
+    end
+
+    local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 3)
+    if not head then
+        return false
+    end
+
+    clearLocalGroupTag()
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "CartiHubGroupTag"
+    billboard.Adornee = head
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.fromOffset(210, 45)
+    billboard.StudsOffset = Vector3.new(0, 1.8, 0)
+    billboard.Parent = head
+
+    local label = Instance.new("TextLabel")
+    label.Name = "TagLabel"
+    label.Size = UDim2.fromScale(1, 1)
+    label.BackgroundTransparency = 1
+    label.RichText = true
+    label.TextScaled = true
+    label.Text = ("<b><font color=%q>%s</font></b>"):format(
+        tostring(config.chatColor or colorToHex(colorFromGroupTagConfig(config.color))),
+        tostring(config.label or groupTagDisplayNames[tagKey] or tagKey)
+    )
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.FredokaOne
+    label.Parent = billboard
+
+    activeGroupTagKey = tagKey
+    return true
+end
+
+local function createTagButton(tagName, configKey, layoutOrder)
+    local button = Instance.new("TextButton")
+    button.Name = configKey
+    button.LayoutOrder = layoutOrder
+    button.BackgroundColor3 = Color3.fromRGB(52, 28, 78)
+    button.BorderSizePixel = 0
+    button.Text = tagName
+    button.TextColor3 = Color3.fromRGB(235, 220, 250)
+    button.Font = Enum.Font.GothamSemibold
+    button.TextSize = 12
+    button.TextWrapped = true
+    button.AutoButtonColor = false
+    button.Parent = tagsFrame
+    makeCorner(button, 8)
+    tagButtons[configKey] = button
+
+    button.MouseButton1Click:Connect(function()
+        if activeGroupTagKey == configKey then
+            clearLocalGroupTag()
+            activeGroupTagKey = nil
+            selectedTags[configKey] = false
+        elseif applyLocalGroupTag(configKey) then
+            for key in pairs(selectedTags) do
+                selectedTags[key] = false
+            end
+
+            selectedTags[configKey] = true
+        end
+
+        for key, tagButton in pairs(tagButtons) do
+            tagButton.BackgroundColor3 = selectedTags[key]
+                and Color3.fromRGB(140, 60, 200)
+                or Color3.fromRGB(52, 28, 78)
+        end
+    end)
+
+    return button
+end
+
+createTagButton("Content Creator", "ContentCreator", 1)
+createTagButton("Music Producer", "MusicProducer", 2)
+createTagButton("Scripter", "Scripter", 3)
+createTagButton("Tester", "Tester", 4)
+
+localPlayer.CharacterAdded:Connect(function()
+    if activeGroupTagKey then
+        task.defer(applyLocalGroupTag, activeGroupTagKey)
+    end
+end)
 
 local function applyLocalRobuxAmount()
     local amount = math.max(0, math.floor(tonumber(robuxBox.Text) or localRobuxAmount))
