@@ -1965,7 +1965,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -40, 0, 50)
 Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "t.me/cartiscripts"
+Title.Text = "Carti Hub"
 Title.TextColor3 = Color3.fromRGB(255, 235, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 22
@@ -3295,8 +3295,103 @@ task.spawn(function()
     end
 end)
 
-CreateBtn(SettingsFrame, "TRADE REQUEST: OFF")
-CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
+do
+local AutoTradeBtn = CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
+local autoTradeEnabled = false
+local autoTradeSequence = 0
+
+if _G.CartiHubAutoTradeState then
+    _G.CartiHubAutoTradeState.Enabled = false
+end
+
+local autoTradeState = {
+    Enabled = false,
+}
+
+_G.CartiHubAutoTradeState = autoTradeState
+-- Edit this list to control which item names Auto Trade searches for.
+_G.CartiHubAutoTradeSearchTerms = {
+"Gingerscope",
+"Blossom",
+"Flora",
+"Heart Wand",
+"Sakura",
+"Sunrise",
+"Sunset",
+"Sweet",
+"Treat",
+"Turkey",
+"Watergun",
+"Celestial",
+"Icepiercer",
+"Swirly Axe",
+"Bauble",
+"Blizzard",
+"Constellation",
+"Evergreen",
+"Evergun",
+"Swirly Gun",
+"Traveler's Axe",
+"Bat",
+"Raygun",
+"Traveler's Gun",
+"Vampires's Gun"
+}
+
+local function isAutoTradeBusy()
+    local gui = tradeModule.GUI
+    if not gui then
+        return true
+    end
+
+    if _G.CartiHubFakeTradeActive then
+        return true
+    end
+
+    if gui.TradeGUI and gui.TradeGUI.Enabled then
+        return true
+    end
+
+    return gui.RequestFrame and gui.RequestFrame.Visible or false
+end
+
+local function setAutoTradeEnabled(enabled)
+    autoTradeEnabled = enabled == true
+    autoTradeState.Enabled = autoTradeEnabled
+    autoTradeSequence += 1
+
+    local sequence = autoTradeSequence
+    AutoTradeBtn.Text = autoTradeEnabled and "AUTO TRADE: ON" or "AUTO TRADE: OFF"
+    AutoTradeBtn.BackgroundColor3 = autoTradeEnabled and BUTTON_HOVER_COLOR or BUTTON_COLOR
+
+    if not autoTradeEnabled then
+        return
+    end
+
+    task.spawn(function()
+        while autoTradeEnabled
+            and autoTradeState.Enabled
+            and sequence == autoTradeSequence
+            and SakaUI
+            and SakaUI.Parent do
+            if not isAutoTradeBusy() then
+                local startFakeRequest = _G.CartiHubStartTradeRequest
+                if type(startFakeRequest) == "function" then
+                    _G.CartiHubAutoTradeSearchPending = true
+                    startFakeRequest()
+                end
+            end
+
+            task.wait(math.random(20, 40) / 10)
+        end
+    end)
+end
+
+AutoTradeBtn.MouseButton1Click:Connect(function()
+    setAutoTradeEnabled(not autoTradeEnabled)
+end)
+end
+
 local friendJoinDelaySeconds = 30
 local autoFriendJoinEnabled = false
 local autoFriendJoinSequence = 0
@@ -3766,9 +3861,7 @@ _G.CartiHubLastTradedPlayerName = _G.CartiHubLastTradedPlayerName
 _G.CartiHubPendingFakeTradeUsername = nil
 _G.CartiHubActiveFakeTradeUsername = nil
 _G.CartiHubFakeTradeActive = false
-_G.CartiHubDebugFakeTradeAccept = true
-_G.CartiHubLastAcceptTrace = nil
-warn("[Carti Hub][AcceptDebug] enabled")
+_G.CartiHubDebugFakeTradeAccept = false
 
 local function pickFakeTradeSenderName()
     currentFakeTradeSenderName = customUsers[math.random(1, #customUsers)] or "RandomPlayer"
@@ -4309,7 +4402,7 @@ function CartiHubEnsureFakeTradeWatermark()
         watermark.Position = UDim2.new(1, -8, 0, 6)
         watermark.Text = "t.me/cartiscripts"
         watermark.TextColor3 = Color3.fromRGB(255, 255, 255)
-        watermark.TextTransparency = 0.7
+        watermark.TextTransparency = 0.55
         watermark.Font = Enum.Font.Gotham
         watermark.TextSize = 10
         watermark.TextXAlignment = Enum.TextXAlignment.Right
@@ -4374,6 +4467,8 @@ function CartiHubQueueFakeTradeFrameRepair()
 end
 
 function CartiHubDisconnectFakeTradeFrameGuardSignals()
+    _G.CartiHubAutoTradeOfferSequence = (_G.CartiHubAutoTradeOfferSequence or 0) + 1
+
     for _, connection in ipairs(_G.CartiHubFakeTradeGuardConnections or {}) do
         pcall(function()
             connection:Disconnect()
@@ -4381,6 +4476,13 @@ function CartiHubDisconnectFakeTradeFrameGuardSignals()
     end
 
     _G.CartiHubFakeTradeGuardConnections = {}
+
+    if _G.CartiHubFakeTradeSearchConnection then
+        pcall(function()
+            _G.CartiHubFakeTradeSearchConnection:Disconnect()
+        end)
+        _G.CartiHubFakeTradeSearchConnection = nil
+    end
 end
 
 function CartiHubConnectFakeTradeFrameGuardSignals()
@@ -4482,46 +4584,7 @@ function CartiHubSetAcceptContainerOverlayVisible(visible)
 end
 
 function CartiHubTraceFakeAcceptState(reason)
-    if not _G.CartiHubDebugFakeTradeAccept then
-        return
-    end
-
-    local actions = tradeModule.GUI and tradeModule.GUI.Actions
-    local accept = actions and actions:FindFirstChild("Accept")
-    local actionButton = accept and accept:FindFirstChild("ActionButton")
-    local cooldown = accept and accept:FindFirstChild("Cooldown")
-    local confirm = accept and accept:FindFirstChild("Confirm")
-    local cancel = accept and accept:FindFirstChild("Cancel")
-    local addItem = accept and accept:FindFirstChild("AddItem")
-    local containerOverlay = accept and accept:FindFirstChild("ClientPlaceholderTradeActionOverlay")
-    local actionOverlay = actionButton and actionButton:FindFirstChild("ClientPlaceholderTradeActionOverlay")
-    local color = actionButton and actionButton:IsA("GuiObject") and actionButton.BackgroundColor3
-    local colorText = color and ("%d,%d,%d"):format(color.R * 255, color.G * 255, color.B * 255) or "nil"
-
-    local signature = table.concat({
-        tostring(reason),
-        tostring(localAcceptMode),
-        tostring(_G.CartiHubFakeTradeActive),
-        tostring(accept and accept.Visible),
-        tostring(actionButton and actionButton.Visible),
-        tostring(actionButton and actionButton:IsA("GuiButton") and actionButton.Active),
-        tostring(actionButton and actionButton:IsA("GuiButton") and actionButton.AutoButtonColor),
-        tostring(actionButton and actionButton:IsA("GuiObject") and actionButton.BackgroundTransparency),
-        colorText,
-        tostring(cooldown and cooldown.Visible),
-        tostring(confirm and confirm.Visible),
-        tostring(cancel and cancel.Visible),
-        tostring(addItem and addItem.Visible),
-        tostring(containerOverlay and containerOverlay.Visible),
-        tostring(actionOverlay and actionOverlay.Visible),
-    }, "|")
-
-    if signature == _G.CartiHubLastAcceptTrace then
-        return
-    end
-
-    _G.CartiHubLastAcceptTrace = signature
-    warn("[Carti Hub][AcceptDebug] " .. signature)
+    return
 end
 
 function CartiHubWakeAcceptActionButton()
@@ -4881,6 +4944,156 @@ local function toggleLocalOffer(itemId, itemType)
     startAcceptCooldown(5)
 end
 
+function CartiHubGetFakeTradeSearchBox()
+    local gui = tradeModule.GUI
+    local tradeGui = gui and gui.TradeGUI
+
+    return tradeGui
+        and tradeGui:FindFirstChild("Container")
+        and tradeGui.Container:FindFirstChild("Items")
+        and tradeGui.Container.Items:FindFirstChild("Tabs")
+        and tradeGui.Container.Items.Tabs:FindFirstChild("Search")
+        and tradeGui.Container.Items.Tabs.Search:FindFirstChild("Container")
+        and tradeGui.Container.Items.Tabs.Search.Container:FindFirstChild("SearchText")
+end
+
+function CartiHubStartAutoTradeOfferFill()
+    _G.CartiHubAutoTradeOfferSequence = (_G.CartiHubAutoTradeOfferSequence or 0) + 1
+    local sequence = _G.CartiHubAutoTradeOfferSequence
+
+    task.spawn(function()
+        local function isActive()
+            return _G.CartiHubAutoTradeOfferSequence == sequence and _G.CartiHubFakeTradeActive == true
+        end
+
+        local function isAlreadyOffered(itemId, itemType)
+            for _, offer in ipairs(localOffer) do
+                if offer.ItemID == itemId and offer.ItemType == itemType then
+                    return true
+                end
+            end
+
+            return false
+        end
+
+        local function getCandidate()
+            local inventory = tradeModule.TradeInventory
+            local candidates = {}
+            local searchTerms = _G.CartiHubAutoTradeSearchTerms
+
+            if type(searchTerms) ~= "table" or #searchTerms == 0 then
+                return nil
+            end
+
+            for itemType, typeData in pairs(inventory and inventory.Data or {}) do
+                if itemType == "Weapons" or itemType == "Item" then
+                    for itemId, entry in pairs(typeData.Current or {}) do
+                        local availableAmount = math.max(0, math.floor(tonumber(entry.Amount) or 0))
+                        if availableAmount > 0
+                            and canFakeTradeItem(itemId, itemType)
+                            and not isAlreadyOffered(itemId, itemType) then
+                            local itemName = tostring(entry.Name or itemId)
+                            local lowerItemName = itemName:lower()
+
+                            for _, term in ipairs(searchTerms) do
+                                term = tostring(term or "")
+                                if term ~= "" and lowerItemName:find(term:lower(), 1, true) then
+                                    table.insert(candidates, {
+                                        ItemID = itemId,
+                                        ItemType = itemType,
+                                        Name = itemName,
+                                        SearchTerm = term,
+                                        AvailableAmount = availableAmount,
+                                    })
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            if #candidates == 0 then
+                return nil
+            end
+
+            return candidates[math.random(1, #candidates)]
+        end
+
+        local function typeSearch(searchText, term)
+            task.wait(math.random(100, 180) / 100)
+            if not isActive() or not searchText.Parent then
+                return false
+            end
+
+            searchText.Text = ""
+
+            for index = 1, #term do
+                if not isActive() or not searchText.Parent then
+                    return false
+                end
+
+                searchText.Text = term:sub(1, index)
+                task.wait(math.random(6, 16) / 100)
+            end
+
+            return true
+        end
+
+        while isActive() and #localOffer < 4 do
+            local candidate = getCandidate()
+            local searchText = CartiHubGetFakeTradeSearchBox()
+            if not candidate or not searchText or not searchText:IsA("TextBox") then
+                return
+            end
+
+            if not typeSearch(searchText, tostring(candidate.SearchTerm)) then
+                return
+            end
+
+            local addCount = math.random(1, math.min(3, candidate.AvailableAmount))
+            for _ = 1, addCount do
+                if not isActive() then
+                    return
+                end
+
+                toggleLocalOffer(candidate.ItemID, candidate.ItemType)
+                task.wait(math.random(45, 90) / 100)
+            end
+
+            task.wait(math.random(20, 45) / 100)
+            for index = #searchText.Text - 1, 0, -1 do
+                if not isActive() or not searchText.Parent then
+                    return
+                end
+
+                searchText.Text = searchText.Text:sub(1, index)
+                task.wait(math.random(10, 20) / 100)
+            end
+
+            task.wait(math.random(25, 55) / 100)
+        end
+
+        while isActive() and localAcceptMode == "Cooldown" do
+            task.wait(0.1)
+        end
+
+        if isActive() and #localOffer >= 4 and localAcceptMode == "Accept" then
+            task.wait(math.random(35, 75) / 100)
+        end
+
+        if isActive() and #localOffer >= 4 and localAcceptMode == "Accept" then
+            localConfirmStartedAt = time()
+            setLocalAcceptState("Confirm")
+            task.wait(math.random(60, 115) / 100)
+
+            if isActive() and localAcceptMode == "Confirm" then
+                setLocalAcceptState("Waiting")
+                scheduleOtherSideAccept()
+            end
+        end
+    end)
+end
+
 local function getRandomGodlyWeapon()
     local candidates = {}
 
@@ -5126,9 +5339,54 @@ local function installInventoryToggleButtons()
     end
 end
 
+function CartiHubInstallFakeTradeSearchFilter()
+    if _G.CartiHubFakeTradeSearchConnection then
+        _G.CartiHubFakeTradeSearchConnection:Disconnect()
+        _G.CartiHubFakeTradeSearchConnection = nil
+    end
+
+    local gui = tradeModule.GUI
+    local searchText = gui
+        and gui.TradeGUI
+        and gui.TradeGUI:FindFirstChild("Container")
+        and gui.TradeGUI.Container:FindFirstChild("Items")
+        and gui.TradeGUI.Container.Items:FindFirstChild("Tabs")
+        and gui.TradeGUI.Container.Items.Tabs:FindFirstChild("Search")
+        and gui.TradeGUI.Container.Items.Tabs.Search:FindFirstChild("Container")
+        and gui.TradeGUI.Container.Items.Tabs.Search.Container:FindFirstChild("SearchText")
+
+    if not searchText or not searchText:IsA("TextBox") then
+        return
+    end
+
+    local function applyFilter()
+        local inventory = tradeModule.TradeInventory
+        if not inventory or not inventory.Data then
+            return
+        end
+
+        local query = tostring(searchText.Text or ""):lower()
+
+        for _, itemTypeData in pairs(inventory.Data) do
+            for _, entry in pairs(itemTypeData.Current or {}) do
+                if entry.Frame then
+                    local itemName = tostring(entry.Name or ""):lower()
+                    entry.Frame.Visible = query == "" or itemName:find(query, 1, true) ~= nil
+                end
+            end
+        end
+    end
+
+    _G.CartiHubFakeTradeSearchConnection = searchText:GetPropertyChangedSignal("Text"):Connect(applyFilter)
+    applyFilter()
+end
+
 local function openTradeFrameFromAccept()
     local tradeGui = tradeModule.GUI.TradeGUI
     local tradeContainer = tradeGui.Container
+    local shouldAutoSearch = _G.CartiHubAutoTradeSearchPending == true
+
+    _G.CartiHubAutoTradeSearchPending = nil
 
     _G.CartiHubFakeTradeActive = true
     CartiHubStartFakeTradeFrameGuard()
@@ -5156,6 +5414,7 @@ local function openTradeFrameFromAccept()
     )
 
     tradeModule.ConnectOfferButtons(tradeModule.TradeInventory)
+    CartiHubInstallFakeTradeSearchFilter()
     redrawLocalTrade()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
     CartiHubApplyPendingFakeTradeUsername()
@@ -5169,6 +5428,10 @@ local function openTradeFrameFromAccept()
     CartiHubEnforceFakeTradeFrame()
     task.defer(CartiHubWakeAcceptActionButton)
     task.defer(CartiHubEnforceFakeTradeFrame)
+
+    if shouldAutoSearch then
+        CartiHubStartAutoTradeOfferFill()
+    end
 end
 
 local function getAcceptButton()
@@ -5278,6 +5541,7 @@ function CartiHubLaunchUpgradeFakeTrade(username)
         return false
     end
 
+    _G.CartiHubAutoTradeSearchPending = nil
     _G.CartiHubPendingFakeTradeUsername = username
     _G.CartiHubActiveFakeTradeUsername = username
     showIncomingTradeRequest()
@@ -5285,6 +5549,7 @@ function CartiHubLaunchUpgradeFakeTrade(username)
 end
 
 StartTradeBtn.MouseButton1Click:Connect(function()
+    _G.CartiHubAutoTradeSearchPending = nil
     _G.CartiHubPendingFakeTradeUsername = nil
     _G.CartiHubActiveFakeTradeUsername = nil
     showIncomingTradeRequest()
@@ -5340,6 +5605,7 @@ _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect
     end
 
     if input.KeyCode == Enum.KeyCode.Z then
+        _G.CartiHubAutoTradeSearchPending = nil
         _G.CartiHubPendingFakeTradeUsername = nil
         _G.CartiHubActiveFakeTradeUsername = nil
         showIncomingTradeRequest()
@@ -5365,15 +5631,6 @@ _G.CartiHubStartTradeRequest = function()
 end
 _G.CartiHubLaunchUpgradeFakeTrade = CartiHubLaunchUpgradeFakeTrade
 _G.CartiHubSetAutoSelectLastTraded = CartiHubSetAutoSelectLastTraded
-_G.CartiHubSetAcceptDebug = function(enabled)
-    _G.CartiHubDebugFakeTradeAccept = enabled == true
-    _G.CartiHubLastAcceptTrace = nil
-    CartiHubTraceFakeAcceptState("manual_toggle")
-end
-_G.CartiHubDumpAcceptState = function()
-    _G.CartiHubLastAcceptTrace = nil
-    CartiHubTraceFakeAcceptState("manual_dump")
-end
 _G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
 _G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
 _G.CartiHubPopulateWeaponSpawner = populateWeaponSpawner
