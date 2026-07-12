@@ -3378,7 +3378,21 @@ local function setAutoTradeEnabled(enabled)
                 local startFakeRequest = _G.CartiHubStartTradeRequest
                 if type(startFakeRequest) == "function" then
                     _G.CartiHubAutoTradeSearchPending = true
+                    _G.CartiHubAutoTradeRequestSequence = (_G.CartiHubAutoTradeRequestSequence or 0) + 1
+                    local requestSequence = _G.CartiHubAutoTradeRequestSequence
                     startFakeRequest()
+
+                    task.delay(math.random(50, 100) / 100, function()
+                        if autoTradeEnabled
+                            and autoTradeState.Enabled
+                            and sequence == autoTradeSequence
+                            and requestSequence == _G.CartiHubAutoTradeRequestSequence then
+                            local acceptRequest = _G.CartiHubAutoAcceptPendingRequest
+                            if type(acceptRequest) == "function" then
+                                acceptRequest()
+                            end
+                        end
+                    end)
                 end
             end
 
@@ -5534,6 +5548,27 @@ showIncomingTradeRequest = function()
             CartiHubApplyPendingRequestUsername(moduleSenderName)
         end)
     end
+end
+
+_G.CartiHubAutoAcceptPendingRequest = function()
+    if _G.CartiHubAutoTradeSearchPending ~= true or _G.CartiHubFakeTradeActive then
+        return false
+    end
+
+    local gui = tradeModule.GUI
+    local requestFrame = gui and gui.RequestFrame
+    local receivingRequest = requestFrame and requestFrame:FindFirstChild("ReceivingRequest")
+
+    if not requestFrame
+        or not requestFrame.Visible
+        or not receivingRequest
+        or not receivingRequest.Visible then
+        return false
+    end
+
+    CartiHubCleanupRequestAcceptBridge()
+    task.defer(openTradeFrameFromAccept)
+    return true
 end
 
 function CartiHubLaunchUpgradeFakeTrade(username)
