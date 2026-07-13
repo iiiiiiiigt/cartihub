@@ -3424,6 +3424,19 @@ CreateBtn(KeybindsFrame, "Friend Join: F")
 CreateBtn(KeybindsFrame, "Spawn All: None")
 
 do
+local avatarPersistenceState = _G.CartiHubAvatarPersistenceState or {
+    UserId = nil,
+    Connection = nil,
+}
+
+if avatarPersistenceState.Connection then
+    pcall(function()
+        avatarPersistenceState.Connection:Disconnect()
+    end)
+end
+
+_G.CartiHubAvatarPersistenceState = avatarPersistenceState
+
 local AvatarChangerFrame = Instance.new("Frame")
 AvatarChangerFrame.Name = "AvatarChangerGUI"
 AvatarChangerFrame.Size = UDim2.new(0, 280, 0, 190)
@@ -3816,11 +3829,39 @@ applyAvatarFromUserId = function(userIdOrName)
     if not applyOk then
         warn("[Carti Hub] HumanoidDescription apply failed, using model copy fallback: " .. tostring(applyErr))
         applyBodyDescriptionValues(humanoid, description)
-        return applyAvatarByGeneratedModel(userId, character)
+        local fallbackOk, fallbackErr = applyAvatarByGeneratedModel(userId, character)
+        if fallbackOk then
+            avatarPersistenceState.UserId = userId
+        end
+        return fallbackOk, fallbackErr
     end
 
+    avatarPersistenceState.UserId = userId
     return true
 end
+
+avatarPersistenceState.Connection = localPlayer.CharacterAdded:Connect(function(character)
+    local savedUserId = avatarPersistenceState.UserId
+    if not savedUserId then
+        return
+    end
+
+    task.spawn(function()
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+            or character:WaitForChild("Humanoid", 5)
+        if not humanoid then
+            return
+        end
+
+        task.wait(0.35)
+        if avatarPersistenceState.UserId == savedUserId and character == localPlayer.Character then
+            local ok, errText = applyAvatarFromUserId(savedUserId)
+            if not ok then
+                warn("[Carti Hub] Could not restore saved avatar: " .. tostring(errText))
+            end
+        end
+    end)
+end)
 
 AvatarChangerBtn.MouseButton1Click:Connect(function()
     AvatarChangerFrame.Visible = not AvatarChangerFrame.Visible
