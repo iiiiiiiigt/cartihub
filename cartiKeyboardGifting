@@ -79,6 +79,12 @@ local function setGeneralNotificationText(frame, text)
         label.TextColor3 = Color3.fromRGB(85, 255, 127)
         label.Visible = true
         frame.Visible = true
+        frame.Position = UDim2.new(
+            frame.Position.X.Scale,
+            frame.Position.X.Offset,
+            frame.Position.Y.Scale,
+            -24
+        )
         return true
     end
 
@@ -126,7 +132,9 @@ local function rewriteGiftNotificationIfNeeded()
         local lowerText = currentText:lower()
         local lowerDesired = desiredText:lower()
 
-        if lowerText:find("gift cancelled", 1, true) or lowerText == lowerDesired then
+        if lowerText:find("gift cancelled", 1, true)
+            or lowerText:find("item shop restocked", 1, true)
+            or lowerText == lowerDesired then
             if setGeneralNotificationText(notificationText.Parent, desiredText) then
                 foundationDebug("gift_notice", "rewrote exact general notification label")
                 return true
@@ -163,7 +171,8 @@ local function maybeOverrideGiftCancelledLabel(label)
     end
 
     local lowerText = tostring(label.Text or ""):lower()
-    if lowerText:find("gift cancelled", 1, true) then
+    if lowerText:find("gift cancelled", 1, true)
+        or lowerText:find("item shop restocked", 1, true) then
         label.Text = pendingGiftNotificationLockedText ~= "" and pendingGiftNotificationLockedText
             or ("Gift sent to " .. tostring(pendingGiftNotificationRecipient) .. "!")
         label.TextColor3 = Color3.fromRGB(85, 255, 127)
@@ -219,6 +228,10 @@ local function fireGiftSentTopNotification(recipient)
         return false
     end
 
+    pendingGiftNotificationRecipient = tostring(recipient)
+    pendingGiftNotificationLockedText = "Gift sent to " .. tostring(recipient) .. "!"
+    pendingGiftNotificationExpiresAt = os.clock() + 10
+
     local success, err = pcall(function()
         local event = game:GetService("ReplicatedStorage").Packages._Index["littensy_remo@1.5.3"].remo.container.ShopUpdate
         firesignal(event.OnClientEvent, {
@@ -248,9 +261,19 @@ local function fireGiftSentTopNotification(recipient)
         return false
     end
 
-    pendingGiftNotificationRecipient = tostring(recipient)
-    pendingGiftNotificationLockedText = "Gift sent to " .. tostring(recipient) .. "!"
-    pendingGiftNotificationExpiresAt = os.clock() + 10
+    -- ShopUpdate assigns its restock text asynchronously, so overwrite the exact
+    -- notification frame for a short window after the event has been delivered.
+    for _, delaySeconds in ipairs({ 0, 0.05, 0.12, 0.25, 0.45 }) do
+        task.delay(delaySeconds, function()
+            if pendingGiftNotificationRecipient ~= tostring(recipient) then
+                return
+            end
+
+            local _, frame = getGeneralNotificationFrame()
+            setGeneralNotificationText(frame, pendingGiftNotificationLockedText)
+        end)
+    end
+
     foundationDebug("gift_notice_fire", "fired ShopUpdate notification for gift recipient")
     return true
 end
@@ -533,10 +556,31 @@ local function showFoundationOverlayPromptReplica()
     headerPrice.BorderSizePixel = 0
     headerPrice.Parent = header
 
-    local headerRobuxIcon = makeText(headerPrice, "Icon", '<font family="rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json" weight="400">robux</font>', UDim2.fromOffset(21, 21), UDim2.fromOffset(0, 3), 20, textColor, regularFont)
+    local headerRobuxIcon = makeText(headerPrice, "Icon", '<font family="rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json" weight="400">robux</font>', UDim2.fromOffset(21, 21), UDim2.fromOffset(0, 1), 20, textColor, regularFont)
     headerRobuxIcon.TextXAlignment = Enum.TextXAlignment.Center
-    local headerRobuxAmount = makeText(headerPrice, "Amount", tostring(localRobuxAmount), UDim2.new(1, -25, 1, 0), UDim2.fromOffset(21, -1), 15, textColor, boldFont)
+    local headerRobuxAmount = makeText(headerPrice, "Amount", tostring(localRobuxAmount), UDim2.new(1, -25, 1, 0), UDim2.fromOffset(24, -3), 15, textColor, boldFont)
     headerRobuxAmount.TextXAlignment = Enum.TextXAlignment.Left
+
+    local function formatRobuxAmount(amount)
+        local value = math.max(0, math.floor(tonumber(amount) or 0))
+        local formatted = tostring(value):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+        return formatted:gsub("^,", "")
+    end
+
+    local function updateHeaderRobuxLayout()
+        local amountText = formatRobuxAmount(localRobuxAmount)
+        local characterCount = math.max(1, #amountText)
+        local extraCharacters = math.max(0, characterCount - 4)
+        local amountWidth = math.max(22, characterCount * 9)
+
+        headerRobuxAmount.Text = amountText
+        headerPrice.Size = UDim2.fromOffset(24 + amountWidth, 28)
+        headerPrice.Position = UDim2.new(1, -24 - (extraCharacters * 8), 0, 17)
+        headerRobuxAmount.Size = UDim2.fromOffset(amountWidth, 28)
+        headerRobuxAmount.Position = UDim2.fromOffset(24, -3)
+    end
+
+    updateHeaderRobuxLayout()
 
     local productContent = Instance.new("Frame")
     productContent.Name = "Content"
@@ -823,13 +867,15 @@ local function showFoundationOverlayPromptReplica()
         end)
 
         -- Close success: card slides down + fades, overlay fades, then destroy
-        local function closeSuccess()
-            if clearFoundationOverlaySafeAreaBurst then
-                clearFoundationOverlaySafeAreaBurst(0.2)
-            end
+        local function closeSuccess(continueAutoReplay)
+            if not continueAutoReplay then
+                if clearFoundationOverlaySafeAreaBurst then
+                    clearFoundationOverlaySafeAreaBurst(0.2)
+                end
 
-            if clearSuppressedRealPurchaseOverlays then
-                clearSuppressedRealPurchaseOverlays()
+                if clearSuppressedRealPurchaseOverlays then
+                    clearSuppressedRealPurchaseOverlays()
+                end
             end
 
             local closeTween = TweenService:Create(card2, TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
@@ -860,10 +906,30 @@ local function showFoundationOverlayPromptReplica()
                     end)
                 end
             end)
+
+            if continueAutoReplay then
+                task.delay(0.65, function()
+                    local autoReplay = _G.CartiHubFoundationAutoReplayState
+                    if autoReplay and autoReplay.Enabled and type(autoReplay.Restart) == "function" then
+                        autoReplay.Restart()
+                    end
+                end)
+            end
         end
 
-        okBtn.MouseButton1Click:Connect(closeSuccess)
-        closeBtn2.MouseButton1Click:Connect(closeSuccess)
+        okBtn.MouseButton1Click:Connect(function()
+            closeSuccess(true)
+        end)
+        closeBtn2.MouseButton1Click:Connect(function()
+            closeSuccess(false)
+        end)
+
+        task.delay(0.75, function()
+            local autoReplay = _G.CartiHubFoundationAutoReplayState
+            if card2.Parent and autoReplay and autoReplay.Enabled then
+                closeSuccess(true)
+            end
+        end)
     end
 
     -- ==========================================
@@ -896,8 +962,8 @@ local function showFoundationOverlayPromptReplica()
     closeButton.MouseButton1Click:Connect(close)
     backdrop.MouseButton1Click:Connect(close)
 
-    -- Buy button click: exact flow from reference (lines 1063-1092)
-    buyButton.MouseButton1Click:Connect(function()
+    -- Shared by the real button click and Auto Replay once the fill animation completes.
+    local function completePurchase()
         if not buyButton.Active then return end
         buyButton.Active = false
 
@@ -905,10 +971,11 @@ local function showFoundationOverlayPromptReplica()
             pendingGiftNotificationRecipient = tostring(currentGiftRecipient)
             pendingGiftNotificationExpiresAt = os.clock() + 10
             pendingGiftNotificationLockedText = "Gift sent to " .. tostring(currentGiftRecipient) .. "!"
+            fireGiftSentTopNotification(currentGiftRecipient)
         end
 
         localRobuxAmount = math.max(0, localRobuxAmount - itemRobuxCost)
-        headerRobuxAmount.Text = tostring(localRobuxAmount)
+        updateHeaderRobuxLayout()
 
         -- Reset fill bar (reference line 1067)
         buyFill.Size = UDim2.new(0, 0, 1, 0)
@@ -951,7 +1018,9 @@ local function showFoundationOverlayPromptReplica()
             -- Show success card (reference line 1090)
             showSuccessCard()
         end)
-    end)
+    end
+
+    buyButton.MouseButton1Click:Connect(completePurchase)
 
     -- ==========================================
     -- OPEN ANIMATIONS
@@ -982,6 +1051,19 @@ local function showFoundationOverlayPromptReplica()
             buyButton.Active = true
             buyButton.AutoButtonColor = false
         end
+    end)
+
+    task.delay(3.35, function()
+        local autoReplay = _G.CartiHubFoundationAutoReplayState
+        if not buyButton.Parent
+            or not buyButton.Active
+            or not autoReplay
+            or not autoReplay.Enabled
+            or tostring(currentGiftRecipient or "") == "" then
+            return
+        end
+
+        completePurchase()
     end)
 end
 
@@ -2161,8 +2243,8 @@ configGui.Parent = parent
 
 local panel = Instance.new("Frame")
 panel.Name = "Panel"
-panel.Size = UDim2.fromOffset(220, 270)
-panel.Position = UDim2.new(0, 20, 0.5, -135)
+panel.Size = UDim2.fromOffset(220, 318)
+panel.Position = UDim2.new(0, 20, 0.5, -159)
 panel.BackgroundColor3 = Color3.fromRGB(34, 18, 52)
 panel.BorderSizePixel = 0
 panel.Active = true
@@ -2181,7 +2263,7 @@ panelTitle.Name = "Title"
 panelTitle.Size = UDim2.new(1, -18, 0, 24)
 panelTitle.Position = UDim2.fromOffset(9, 8)
 panelTitle.BackgroundTransparency = 1
-panelTitle.Text = "t.me/cartiscripts"
+panelTitle.Text = "Foundation Robux"
 panelTitle.TextColor3 = Color3.fromRGB(255, 245, 255)
 panelTitle.Font = Enum.Font.GothamBold
 panelTitle.TextSize = 14
@@ -2390,6 +2472,305 @@ createTagButton("Music Producer", "MusicProducer", 2)
 createTagButton("Scripter", "Scripter", 3)
 createTagButton("Tester", "Tester", 4)
 
+local autoReplayButton = Instance.new("TextButton")
+autoReplayButton.Name = "AutoReplayButton"
+autoReplayButton.Size = UDim2.new(1, -18, 0, 34)
+autoReplayButton.Position = UDim2.fromOffset(9, 278)
+autoReplayButton.BackgroundColor3 = Color3.fromRGB(185, 65, 70)
+autoReplayButton.BorderSizePixel = 0
+autoReplayButton.Text = "AUTO REPLAY: OFF"
+autoReplayButton.TextColor3 = Color3.fromRGB(255, 245, 255)
+autoReplayButton.Font = Enum.Font.GothamBold
+autoReplayButton.TextSize = 13
+autoReplayButton.Parent = panel
+makeCorner(autoReplayButton, 8)
+
+do
+    if _G.CartiHubFoundationAutoReplayState then
+        _G.CartiHubFoundationAutoReplayState.Enabled = false
+    end
+
+    local autoReplayEnabled = false
+    local autoReplaySequence = 0
+    local autoReplayState = { Enabled = false }
+    _G.CartiHubFoundationAutoReplayState = autoReplayState
+    -- Add the usernames Auto Replay should search for here.
+    _G.CartiHubFoundationAutoReplayUsers = {
+        "XKylie_2010", "lakyboxsuperfann", "staglagala", "Anniev6157", "Augus0260", "carla_zion1",
+        "itsme_ai1231", "itsme_llehvher", "GamergirlYT34577", "itsme_jane714", "Elle_62673",
+        "urbb_jing", "Littlecupcake092389", "sampotieee", "etzorr_block", "jhanver_12906",
+        "zoey685547", "baconkind68", "Amberx_xplayzz", "ethantherealsniper", "PrimPrim88009",
+        "zxrcsiq", "jejemonlottto", "L0veBound", "iixemmyy", "gwapopan_j9912", "z0mbi33sr",
+        "balakajan_12345", "black_totts", "ItzYoBoiJr", "harred1235", "ezz_game1234",
+        "babu_5961", "lewis3417", "atm0sfer4", "kertkertgold", "They1uv_Z", "jindc4",
+        "its_acegaming16", "GManU002", "x19soul", "Bluelockgod12101", "Itz_AlexandraPH",
+        "BarbaFam9166", "STEVEN_AOTlol", "yea_yes21", "xXVanilla0re0Xx", "ashtine_be76",
+        "Axisp0", "mine_nuwe", "Robloxiana3o2w6j0c", "eR050r", "boba_camnti", "Killer_03boy",
+        "kevingnx102", "White170256", "crepecpu", "Sigma_of404", "winnerReD15", "Bos_s123456",
+        "bombardio_duck", "jayabearrpurr", "mawgindonut", "ClaraZIzose", "qazwsxedcrfvtyhbj",
+        "XxTWIC3xX", "adc_12367", "your_babyvincris", "killernaid2021", "dark_moon092",
+        "jumar332211", "Cambo9", "MRSCHOCOLATE321", "kfiefiaiuy8e", "Pookung_M", "Ameerzelen",
+        "Poolxdwwwww", "EIEIPROGG3", "darwisy_231115", "setan_4540", "xerluv", "Xarrense",
+        "fl1xkr_xx", "zhenya_13008", "kinji3488", "0kayaddi", "AmirGtMl", "kdkei290",
+        "fuji_XxD", "g0uu79024qtu05gq2ryg", "Angela320224", "mimpoopyui", "ukuha_tobe",
+        "Ariayourpookie", "D1N0ST3R", "Eguiller2", "JSBoss1111", "DanielLikesRice2",
+        "shanksthegreat26", "aydendesu", "tantoy123x6", "james1004338", "avoidsica",
+    }
+
+    local function activateGuiButton(button)
+        if not button or not button:IsA("GuiButton") then
+            return false
+        end
+
+        local activated = false
+        if type(firesignal) == "function" then
+            local mouseClickOk = pcall(function()
+                firesignal(button.MouseButton1Click)
+            end)
+
+            local activatedOk = pcall(function()
+                firesignal(button.Activated)
+            end)
+
+            activated = mouseClickOk or activatedOk
+        end
+
+        local activateOk = pcall(function()
+            button:Activate()
+        end)
+
+        return activated or activateOk
+    end
+
+    local function typeGiftRecipient(sequence, giftModal)
+        local usernames = _G.CartiHubFoundationAutoReplayUsers
+        local usernameInput = giftModal
+            and giftModal:FindFirstChild("MainFrame")
+            and giftModal.MainFrame:FindFirstChild("TextboxFrame")
+            and giftModal.MainFrame.TextboxFrame:FindFirstChild("UsernameInput")
+
+        if not usernameInput or not usernameInput:IsA("TextBox") or type(usernames) ~= "table" or #usernames == 0 then
+            return false
+        end
+
+        local username = tostring(usernames[math.random(1, #usernames)] or "")
+        if #usernames > 1 and username == autoReplayState.LastUsername then
+            for _ = 1, 8 do
+                local nextUsername = tostring(usernames[math.random(1, #usernames)] or "")
+                if nextUsername ~= "" and nextUsername ~= autoReplayState.LastUsername then
+                    username = nextUsername
+                    break
+                end
+            end
+        end
+
+        if username == "" then
+            return false
+        end
+
+        autoReplayState.LastUsername = username
+
+        task.wait(math.random(35, 65) / 100)
+        if not autoReplayEnabled or sequence ~= autoReplaySequence or not usernameInput.Parent then
+            return false
+        end
+
+        usernameInput:CaptureFocus()
+        local priorText = tostring(usernameInput.Text or "")
+        for index = #priorText, 1, -1 do
+            if not autoReplayEnabled or sequence ~= autoReplaySequence or not usernameInput.Parent then
+                return false
+            end
+
+            usernameInput.Text = priorText:sub(1, index - 1)
+            usernameInput.CursorPosition = index
+            task.wait(math.random(6, 12) / 100)
+        end
+
+        usernameInput.CursorPosition = 1
+
+        for index = 1, #username do
+            if not autoReplayEnabled or sequence ~= autoReplaySequence or not usernameInput.Parent then
+                return false
+            end
+
+            usernameInput.Text = username:sub(1, index)
+            usernameInput.CursorPosition = index + 1
+            task.wait(math.random(11, 23) / 100)
+        end
+
+        task.wait(math.random(20, 45) / 100)
+
+        -- GiftClient resolves the target from FocusLost. Trigger that exact event rather
+        -- than sending Return, which can also activate the Send Gift button early.
+        if type(firesignal) == "function" then
+            pcall(function()
+                firesignal(usernameInput.FocusLost, true)
+            end)
+        elseif VirtualInputManager then
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+                task.wait(0.03)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+            end)
+        end
+
+        local playerNameLabel = giftModal:FindFirstChild("PlayerNameLabel", true)
+        local resolveDeadline = os.clock() + 6
+        local playerNotFound = false
+        while os.clock() < resolveDeadline do
+            if not autoReplayEnabled or sequence ~= autoReplaySequence or not giftModal.Parent then
+                return false
+            end
+
+            if playerNameLabel
+                and tostring(playerNameLabel.Text or ""):lower() == username:lower() then
+                break
+            end
+
+            if playerNameLabel
+                and tostring(playerNameLabel.Text or ""):lower():find("player not found", 1, true) then
+                playerNotFound = true
+                break
+            end
+
+            task.wait(0.1)
+        end
+
+        if playerNotFound
+            or not playerNameLabel
+            or tostring(playerNameLabel.Text or ""):lower() ~= username:lower() then
+            task.delay(0.25, function()
+                local autoReplay = _G.CartiHubFoundationAutoReplayState
+                if autoReplay and autoReplay.Enabled and type(autoReplay.Restart) == "function" then
+                    autoReplay.Restart()
+                end
+            end)
+            return false
+        end
+
+        task.wait(0.3)
+        if not autoReplayEnabled or sequence ~= autoReplaySequence or not giftModal.Parent then
+            return false
+        end
+
+        local sendGiftButton = giftModal:FindFirstChild("MainFrame")
+            and giftModal.MainFrame:FindFirstChild("SendGiftButtonFrame")
+            and giftModal.MainFrame.SendGiftButtonFrame:FindFirstChild("SendGiftButton")
+
+        if not sendGiftButton then
+            return false
+        end
+
+        -- Auto Replay intentionally stays client-side: show the normal hover effect,
+        -- then open the local replica with the known Admin Treadmill gift details.
+        if type(firesignal) == "function" then
+            pcall(function()
+                firesignal(sendGiftButton.MouseEnter)
+            end)
+        end
+
+        local originalButtonColor = sendGiftButton.BackgroundColor3
+        local pressedButtonColor = originalButtonColor:Lerp(Color3.fromRGB(105, 105, 112), 0.55)
+        TweenService:Create(sendGiftButton, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = pressedButtonColor,
+        }):Play()
+
+        if type(firesignal) == "function" then
+            pcall(function()
+                firesignal(sendGiftButton.MouseButton1Down)
+            end)
+        end
+
+        task.wait(0.11)
+
+        if type(firesignal) == "function" then
+            pcall(function()
+                firesignal(sendGiftButton.MouseButton1Up)
+            end)
+        end
+
+        TweenService:Create(sendGiftButton, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = originalButtonColor,
+        }):Play()
+
+        productName = "Admin Treadmill - Gift"
+        itemRobuxCost = 1599
+        productImage = "rbxassetid://96718326892742"
+        currentGiftRecipient = username
+        _G.CartiHubFoundationGiftRecipient = username
+
+        task.wait(0.12)
+        if autoReplayEnabled and sequence == autoReplaySequence and giftModal.Parent then
+            showFoundationOverlayPromptReplica()
+        end
+
+        return true
+    end
+
+    local function openAdminTreadmillGiftUi(sequence)
+        local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
+        local speedGameUi = playerGui and playerGui:FindFirstChild("SpeedGameUI")
+        local modals = speedGameUi and speedGameUi:FindFirstChild("Modals")
+        local shopModal = modals and modals:FindFirstChild("RobuxShopModal")
+        local existingGiftModal = modals and modals:FindFirstChild("GiftToPlayerModal")
+
+        if not speedGameUi or not shopModal then
+            return false
+        end
+
+        if existingGiftModal and existingGiftModal.Visible then
+            return typeGiftRecipient(sequence, existingGiftModal)
+        end
+
+        if not shopModal.Visible then
+            local shopButton = speedGameUi:FindFirstChild("Frames")
+                and speedGameUi.Frames:FindFirstChild("RightFrame")
+                and speedGameUi.Frames.RightFrame:FindFirstChild("ButtonsFrame")
+                and speedGameUi.Frames.RightFrame.ButtonsFrame:FindFirstChild("RobuxShopButton")
+
+            activateGuiButton(shopButton)
+        end
+
+        task.wait(1)
+
+        local adminGiftButton = shopModal:FindFirstChild("ScrollingFrame")
+            and shopModal.ScrollingFrame:FindFirstChild("Treadmills")
+            and shopModal.ScrollingFrame.Treadmills:FindFirstChild("MainFrame")
+            and shopModal.ScrollingFrame.Treadmills.MainFrame:FindFirstChild("Admin")
+            and shopModal.ScrollingFrame.Treadmills.MainFrame.Admin:FindFirstChild("Gift")
+
+        if not activateGuiButton(adminGiftButton) then
+            return false
+        end
+
+        task.wait(0.25)
+        local giftModal = modals:FindFirstChild("GiftToPlayerModal")
+        return typeGiftRecipient(sequence, giftModal)
+    end
+
+    autoReplayState.Restart = function()
+        if autoReplayEnabled then
+            task.spawn(openAdminTreadmillGiftUi, autoReplaySequence)
+        end
+    end
+
+    autoReplayButton.MouseButton1Click:Connect(function()
+        autoReplayEnabled = not autoReplayEnabled
+        autoReplaySequence += 1
+        local sequence = autoReplaySequence
+        autoReplayState.Enabled = autoReplayEnabled
+        autoReplayButton.Text = autoReplayEnabled and "AUTO REPLAY: ON" or "AUTO REPLAY: OFF"
+        autoReplayButton.BackgroundColor3 = autoReplayEnabled
+            and Color3.fromRGB(45, 150, 85)
+            or Color3.fromRGB(185, 65, 70)
+
+        if autoReplayEnabled then
+            autoReplayState.Restart()
+        end
+    end)
+end
+
 localPlayer.CharacterAdded:Connect(function()
     if activeGroupTagKey then
         task.defer(applyLocalGroupTag, activeGroupTagKey)
@@ -2505,6 +2886,7 @@ end
 _G.CartiHubGetFoundationRobux = function()
     return localRobuxAmount
 end
+_G.CartiHubShowGiftSentNotification = fireGiftSentTopNotification
 _G.CartiHubSetFoundationProduct = function(name, cost, image)
     if name and tostring(name) ~= "" then
         productName = tostring(name)
