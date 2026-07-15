@@ -813,6 +813,24 @@ local function carti119()
                 task.wait(3)
                 local carti120 = carti95(carti74.trade)
                 carti96(carti120)
+                local carti121 = {}
+                for _, carti122 in ipairs(carti74.trade.sender_offer.items or {}) do
+                    if carti122 and carti122.carti_hub_local_pet and carti122.unique then
+                        carti121[carti122.unique] = true
+                    end
+                end
+                pcall(function()
+                    local carti123 = (getgenv and getgenv()) or _G
+                    if carti123.CartiHubRemoveTransferredLocalPets then
+                        carti123.CartiHubRemoveTransferredLocalPets(carti121)
+                    end
+                end)
+                pcall(function()
+                    local carti124 = (getgenv and getgenv()) or _G
+                    if carti124.CartiHubAddReceivedFakeTradePets then
+                        carti124.CartiHubAddReceivedFakeTradePets(carti74.trade.recipient_offer.items)
+                    end
+                end)
                 carti74.active = false
                 carti74.trade = nil
                 carti74.tradeCompleting = false
@@ -1796,6 +1814,12 @@ end
 
 -- ==================== GUI CREATION ====================
 
+for _, carti206 in ipairs(carti2.LocalPlayer:WaitForChild('PlayerGui'):GetChildren()) do
+    if carti206.Name == 'MockTradeControl' then
+        carti206:Destroy()
+    end
+end
+
 local carti207 = Instance.new('ScreenGui')
 carti207.Name = 'MockTradeControl'
 carti207.ResetOnSpawn = false
@@ -2174,6 +2198,24 @@ function makePartnerAccept()
                     task.wait(3)
                     local carti120 = carti95(carti74.trade)
                     carti96(carti120)
+                    local carti121 = {}
+                    for _, carti122 in ipairs(carti74.trade.sender_offer.items or {}) do
+                        if carti122 and carti122.carti_hub_local_pet and carti122.unique then
+                            carti121[carti122.unique] = true
+                        end
+                    end
+                    pcall(function()
+                        local carti123 = (getgenv and getgenv()) or _G
+                        if carti123.CartiHubRemoveTransferredLocalPets then
+                            carti123.CartiHubRemoveTransferredLocalPets(carti121)
+                        end
+                    end)
+                    pcall(function()
+                        local carti124 = (getgenv and getgenv()) or _G
+                        if carti124.CartiHubAddReceivedFakeTradePets then
+                            carti124.CartiHubAddReceivedFakeTradePets(carti74.trade.recipient_offer.items)
+                        end
+                    end)
                     carti74.active = false
                     carti74.trade = nil
                     carti74.tradeCompleting = false
@@ -3753,6 +3795,207 @@ end
 carti154.inventorySpawnHighTierButton.MouseButton1Click:Connect(carti154.spawnAllHighTierPets)
 carti154.inventoryClearPetsButton.MouseButton1Click:Connect(carti154.clearAllSpawnedPets)
 
+carti154.inventoryToySpawnerTitle = Instance.new('TextLabel')
+carti154.inventoryToySpawnerTitle.Size = UDim2.new(1, 0, 0, 20)
+carti154.inventoryToySpawnerTitle.Position = UDim2.new(0, 0, 0, 188)
+carti154.inventoryToySpawnerTitle.BackgroundTransparency = 1
+carti154.inventoryToySpawnerTitle.Text = 'Toy Spawner'
+carti154.inventoryToySpawnerTitle.Font = Enum.Font.FredokaOne
+carti154.inventoryToySpawnerTitle.TextSize = 11
+carti154.inventoryToySpawnerTitle.TextColor3 = Color3.fromRGB(225, 190, 255)
+carti154.inventoryToySpawnerTitle.TextXAlignment = Enum.TextXAlignment.Left
+carti154.inventoryToySpawnerTitle.Parent = carti154.inventoryTab
+
+carti154.inventoryTopValueToys = {
+    { id = 'candy_cannon', value = 138 },
+    { id = 'flying_broomstick', value = 66 },
+    { id = 'tombstone', value = 36 },
+    { id = 'antler_chew_toy', value = 14 },
+    { id = 'pumpkin_toy', value = 12 },
+}
+
+carti154.spawnToyById = function(carti415)
+    local carti416 = carti26.toys and carti26.toys[carti415]
+    if not carti416 then
+        return false
+    end
+    local carti417 = '2_' .. carti7:GenerateGUID(false)
+    carti161('inventory', function(carti418)
+        carti418.toys = carti418.toys or {}
+        carti418.toys[carti417] = {
+            unique = carti417,
+            category = 'toys',
+            id = carti415,
+            kind = carti415,
+            properties = {},
+            newness_order = os.time() * 1000,
+        }
+        return carti418
+    end)
+    return true
+end
+
+carti154.inventoryToySearchBox = Instance.new('TextBox')
+carti154.inventoryToySearchBox.Size = UDim2.new(0.7, -4, 0, 26)
+carti154.inventoryToySearchBox.Position = UDim2.new(0, 0, 0, 212)
+carti154.inventoryToySearchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+carti154.inventoryToySearchBox.BorderSizePixel = 0
+carti154.inventoryToySearchBox.ClearTextOnFocus = false
+carti154.inventoryToySearchBox.PlaceholderText = 'Spawn toy by name...'
+carti154.inventoryToySearchBox.PlaceholderColor3 = Color3.fromRGB(165, 165, 185)
+carti154.inventoryToySearchBox.Text = ''
+carti154.inventoryToySearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+carti154.inventoryToySearchBox.Font = Enum.Font.Gotham
+carti154.inventoryToySearchBox.TextSize = 10
+carti154.inventoryToySearchBox.TextXAlignment = Enum.TextXAlignment.Left
+carti154.inventoryToySearchBox.Parent = carti154.inventoryTab
+Instance.new('UICorner', carti154.inventoryToySearchBox).CornerRadius = UDim.new(0, 4)
+
+carti154.inventoryToySpawnButton = Instance.new('TextButton')
+carti154.inventoryToySpawnButton.Size = UDim2.new(0.3, 0, 0, 26)
+carti154.inventoryToySpawnButton.Position = UDim2.new(0.7, 0, 0, 212)
+carti154.inventoryToySpawnButton.BackgroundColor3 = Color3.fromRGB(112, 62, 168)
+carti154.inventoryToySpawnButton.BorderSizePixel = 0
+carti154.inventoryToySpawnButton.Text = 'SPAWN'
+carti154.inventoryToySpawnButton.Font = Enum.Font.FredokaOne
+carti154.inventoryToySpawnButton.TextSize = 10
+carti154.inventoryToySpawnButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+carti154.inventoryToySpawnButton.Parent = carti154.inventoryTab
+Instance.new('UICorner', carti154.inventoryToySpawnButton).CornerRadius = UDim.new(0, 4)
+
+carti154.spawnToyByName = function()
+    local carti415 = carti154.inventoryToySearchBox.Text:lower():gsub('^%s+', ''):gsub('%s+$', '')
+    if carti415 == '' then
+        return false
+    end
+    local carti416 = nil
+    for carti417, carti418 in pairs(carti26.toys or {}) do
+        local carti419 = tostring(carti418.name or carti417):lower()
+        if carti419 == carti415 then
+            carti416 = carti417
+            break
+        end
+        if not carti416 and carti419:find(carti415, 1, true) then
+            carti416 = carti417
+        end
+    end
+    if carti416 and carti154.spawnToyById(carti416) then
+        carti154.inventoryToySearchBox.Text = ''
+        carti154.inventoryToySearchBox.PlaceholderText = 'Toy spawned'
+        task.delay(1, function()
+            if carti154.inventoryToySearchBox.Parent then
+                carti154.inventoryToySearchBox.PlaceholderText = 'Spawn toy by name...'
+            end
+        end)
+        return true
+    end
+    carti154.inventoryToySearchBox.PlaceholderText = 'Toy not found'
+    task.delay(1, function()
+        if carti154.inventoryToySearchBox.Parent then
+            carti154.inventoryToySearchBox.PlaceholderText = 'Spawn toy by name...'
+        end
+    end)
+    return false
+end
+
+carti154.inventoryToySpawnButton.MouseButton1Click:Connect(carti154.spawnToyByName)
+carti154.inventoryToySearchBox.FocusLost:Connect(function(carti415)
+    if carti415 then carti154.spawnToyByName() end
+end)
+
+carti154.inventoryToySpawnerButtons = {}
+for carti415, carti416 in ipairs(carti154.inventoryTopValueToys) do
+    local carti417 = carti26.toys and carti26.toys[carti416.id]
+    if carti417 then
+        local carti418 = Instance.new('TextButton')
+        carti418.Size = UDim2.new(1, -27, 0, 25)
+        carti418.Position = UDim2.new(0, 27, 0, 244 + (carti415 - 1) * 27)
+        local carti419 = ({
+            legendary = Color3.fromRGB(144, 104, 42),
+            ultra_rare = Color3.fromRGB(83, 95, 164),
+            rare = Color3.fromRGB(48, 105, 171),
+            uncommon = Color3.fromRGB(56, 128, 79),
+            common = Color3.fromRGB(82, 82, 98),
+        })[carti417.rarity or 'common'] or Color3.fromRGB(67, 47, 98)
+        carti418.BackgroundColor3 = carti419
+        carti418.BackgroundTransparency = 0.12
+        carti418.BorderSizePixel = 0
+        carti418.Text = tostring(carti417.name or carti416.id)
+        carti418.Font = Enum.Font.GothamBold
+        carti418.TextSize = 10
+        carti418.TextColor3 = Color3.fromRGB(245, 240, 255)
+        carti418.TextXAlignment = Enum.TextXAlignment.Left
+        carti418.Parent = carti154.inventoryTab
+        Instance.new('UICorner', carti418).CornerRadius = UDim.new(0, 4)
+
+        local carti420 = Instance.new('ImageLabel')
+        carti420.Size = UDim2.new(0, 25, 0, 25)
+        carti420.Position = UDim2.new(0, 0, 0, 244 + (carti415 - 1) * 27)
+        carti420.BackgroundColor3 = carti419
+        carti420.BackgroundTransparency = 0.12
+        carti420.BorderSizePixel = 0
+        carti420.Image = tostring(carti417.image or '')
+        carti420.ScaleType = Enum.ScaleType.Fit
+        carti420.ZIndex = carti418.ZIndex
+        carti420.Parent = carti154.inventoryTab
+        Instance.new('UICorner', carti420).CornerRadius = UDim.new(0, 4)
+
+        local carti421 = Instance.new('UIPadding')
+        carti421.PaddingLeft = UDim.new(0, 7)
+        carti421.Parent = carti418
+        local carti422 = Instance.new('UIStroke')
+        carti422.Color = carti419:Lerp(Color3.fromRGB(255, 255, 255), 0.4)
+        carti422.Transparency = 0.18
+        carti422.Thickness = 1
+        carti422.Parent = carti418
+        carti154.inventoryToySpawnerButtons[carti416.id] = carti418
+
+        carti418.MouseButton1Click:Connect(function()
+            if carti154.spawnToyById(carti416.id) then
+                local carti423 = carti418.Text
+                carti418.Text = 'SPAWNED ' .. tostring(carti417.name or carti416.id)
+                task.delay(0.9, function()
+                    if carti418.Parent then
+                        carti418.Text = carti423
+                    end
+                end)
+            end
+        end)
+    end
+end
+
+carti154.inventorySpawnTopToysButton = Instance.new('TextButton')
+carti154.inventorySpawnTopToysButton.Name = 'SpawnTopToysButton'
+carti154.inventorySpawnTopToysButton.Size = UDim2.new(1, 0, 0, 30)
+carti154.inventorySpawnTopToysButton.Position = UDim2.new(0, 0, 0, 384)
+carti154.inventorySpawnTopToysButton.BackgroundColor3 = Color3.fromRGB(118, 67, 180)
+carti154.inventorySpawnTopToysButton.BorderSizePixel = 0
+carti154.inventorySpawnTopToysButton.Text = 'SPAWN ALL HIGH LEVEL TOYS (5X EACH)'
+carti154.inventorySpawnTopToysButton.TextColor3 = Color3.fromRGB(255, 245, 255)
+carti154.inventorySpawnTopToysButton.Font = Enum.Font.GothamBold
+carti154.inventorySpawnTopToysButton.TextSize = 10
+carti154.inventorySpawnTopToysButton.Parent = carti154.inventoryTab
+Instance.new('UICorner', carti154.inventorySpawnTopToysButton).CornerRadius = UDim.new(0, 5)
+
+carti154.inventorySpawnTopToysButton.MouseButton1Click:Connect(function()
+    local carti415 = 0
+    for _, carti416 in ipairs(carti154.inventoryTopValueToys) do
+        for _ = 1, 5 do
+            if carti154.spawnToyById(carti416.id) then
+                carti415 += 1
+            end
+        end
+    end
+
+    local carti417 = carti154.inventorySpawnTopToysButton.Text
+    carti154.inventorySpawnTopToysButton.Text = 'SPAWNED ' .. tostring(carti415) .. ' TOYS'
+    task.delay(1.2, function()
+        if carti154.inventorySpawnTopToysButton.Parent then
+            carti154.inventorySpawnTopToysButton.Text = carti417
+        end
+    end)
+end)
+
 carti154.openInventorySpawner = function()
     if carti154.inventorySpawnerDragConnection then
         carti154.inventorySpawnerDragConnection:Disconnect()
@@ -4920,6 +5163,15 @@ carti154.installLocalPetEquipFlow = function()
             return
         end
 
+        if carti454.properties and carti454.properties.neon == true then
+            pcall(function()
+                carti20('PetNeonHelper').apply_neon(
+                    carti457.PetModel,
+                    carti26.pets[carti454.kind].neon_parts
+                )
+            end)
+        end
+
         carti154.nativeLocalPetModel = carti457
         carti154.nativeLocalPetUnique = carti454.unique
         carti154.nativeLocalPetFollowAttachment = carti459
@@ -5085,6 +5337,87 @@ carti154.installLocalPetEquipFlow = function()
 end
 
 carti154.installLocalPetEquipFlow()
+
+pcall(function()
+    local carti453 = (getgenv and getgenv()) or _G
+    if carti453.CartiHubRealTradePetTransferWatcher then
+        carti453.CartiHubRealTradePetTransferWatcher.Enabled = false
+        carti453.CartiHubRealTradePetTransferWatcher = nil
+    end
+end)
+
+-- Remove a client-spawned pet after it has been transferred through a fake trade.
+carti154.removeTransferredLocalPets = function(carti453)
+    if type(carti453) ~= 'table' or next(carti453) == nil then
+        return 0
+    end
+
+    local carti454 = carti154.nativeLocalPetUnique
+    if carti454 and carti453[carti454] then
+        if carti154.setNativeLocalPetRiding then
+            carti154.setNativeLocalPetRiding(false)
+        end
+        if carti154.clearNativeLocalPetHeld then
+            carti154.clearNativeLocalPetHeld()
+        end
+        if carti154.clearLocalPetEquipState then
+            carti154.clearLocalPetEquipState()
+        end
+    end
+
+    local carti455 = 0
+    carti161('inventory', function(carti456)
+        carti456.pets = carti456.pets or {}
+        for carti457 in pairs(carti453) do
+            local carti458 = carti456.pets[carti457]
+            if carti458 and carti458.carti_hub_local_pet then
+                carti456.pets[carti457] = nil
+                carti455 += 1
+            end
+        end
+        return carti456
+    end)
+    return carti455
+end
+
+carti154.addReceivedFakeTradePets = function(carti453)
+    if type(carti453) ~= 'table' then
+        return 0
+    end
+
+    local carti454 = 0
+    carti161('inventory', function(carti455)
+        carti455.pets = carti455.pets or {}
+        for _, carti456 in ipairs(carti453) do
+            local carti457 = carti456 and (carti456.kind or carti456.id)
+            if carti456 and carti456.category == 'pets' and carti457 and carti26.pets and carti26.pets[carti457] then
+                local carti458 = '2_' .. carti7:GenerateGUID(false)
+                carti455.pets[carti458] = {
+                    unique = carti458,
+                    category = 'pets',
+                    carti_hub_local_pet = true,
+                    id = carti457,
+                    kind = carti457,
+                    properties = carti24.deep_copy(carti456.properties or {}),
+                    newness_order = os.time() * 1000 + carti454,
+                }
+                carti454 += 1
+            end
+        end
+        return carti455
+    end)
+
+    if carti454 > 0 and carti154.organizeSpawnedPets then
+        carti154.organizeSpawnedPets(carti53)
+    end
+    return carti454
+end
+
+pcall(function()
+    local carti459 = (getgenv and getgenv()) or _G
+    carti459.CartiHubRemoveTransferredLocalPets = carti154.removeTransferredLocalPets
+    carti459.CartiHubAddReceivedFakeTradePets = carti154.addReceivedFakeTradePets
+end)
 
 -- ==================== USERS TAB ====================
 local carti349 = carti155['Users']
