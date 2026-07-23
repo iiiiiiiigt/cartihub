@@ -110,6 +110,34 @@ end
 
 -- Fill this table manually. Prefer exact database ids as keys because display names can overlap.
 -- The watcher below applies the matching visual whenever your local equipped knife/gun changes.
+local function createEvergreenLightPart(relativePosition, size, meshId)
+    return {
+        ClassName = "MeshPart",
+        Path = { "LightParts" },
+        RelativeCFrame = CFrame.new(relativePosition),
+        Properties = {
+            Name = "LightPart",
+            Size = size,
+            Color = Color3.new(0.97254902124405, 0.85098040103912, 0.42745098471642),
+            Material = Enum.Material.Neon,
+            Transparency = 0,
+            Reflectance = 0,
+            CastShadow = true,
+            MeshId = meshId,
+            TextureID = "",
+        },
+    }
+end
+
+local EvergreenLightPartsVisualTree = {
+    { ClassName = "Model", Path = {}, Properties = { Name = "LightParts" } },
+    createEvergreenLightPart(Vector3.new(0.0247802734375, 0.0009765625, -0.136474609375), Vector3.new(1.0546045303345, 2.2052347660065, 0.84564638137817), "rbxassetid://15408281396"),
+    createEvergreenLightPart(Vector3.new(0.0765380859375, -0.1904296875, 0.12353515625), Vector3.new(1.0034183263779, 2.1422207355499, 1.0312020778656), "rbxassetid://15408281127"),
+    createEvergreenLightPart(Vector3.new(-0.0377197265625, 1.1748046875, -0.029541015625), Vector3.new(0.11298670619726, 0.13323910534382, 0.063117004930973), "rbxassetid://15408281298"),
+    createEvergreenLightPart(Vector3.new(0.0809326171875, -0.3125, 0.070068359375), Vector3.new(0.93531209230423, 1.8643255233765, 0.91616159677505), "rbxassetid://15408281195"),
+    createEvergreenLightPart(Vector3.new(0.0416259765625, -0.60546875, 0.029052734375), Vector3.new(1.0206427574158, 1.132918715477, 0.87230980396271), "rbxassetid://15408281466"),
+}
+
 local WeaponVisuals = {
     ["Flowerwood Gun"] = {
         Type = "Gun",
@@ -996,6 +1024,8 @@ local WeaponVisuals = {
 },
 }
 
+WeaponVisuals["Evergreen"].VisualTree = EvergreenLightPartsVisualTree
+
 local function getPlacementAttachment(character, placement)
     if placement == "Back" then
         return character:FindFirstChild("UpperTorso")
@@ -1286,7 +1316,8 @@ local function cleanupPreviousWeaponDisplay(refName, currentDisplay, character)
 end
 
 local function shouldCloneVisualChild(instance)
-    return instance:IsA("Light")
+    return instance:IsA("Attachment")
+        or instance:IsA("Light")
         or instance:IsA("ParticleEmitter")
         or instance:IsA("Beam")
         or instance:IsA("Trail")
@@ -1369,6 +1400,106 @@ local function cloneVisualChildrenFromPlayer(display, refName, sourcePlayerName)
             clone.Parent = display
         end
     end
+end
+
+local function findVisualParent(display, path)
+    local parent = display
+
+    for _, name in ipairs(path or {}) do
+        parent = parent:FindFirstChild(name)
+        if not parent then
+            return nil
+        end
+    end
+
+    return parent
+end
+
+local function applyExportedVisualChildren(display, visualChildren)
+    if type(visualChildren) ~= "table" then
+        return false
+    end
+
+    clearClonedVisualChildren(display)
+
+    for _, visualData in ipairs(visualChildren) do
+        local className = visualData.ClassName
+        local properties = visualData.Properties
+        local parent = findVisualParent(display, visualData.Path)
+
+        if type(className) == "string" and type(properties) == "table" and parent then
+            local ok, visual = pcall(Instance.new, className)
+            if ok and visual then
+                for propertyName, value in pairs(properties) do
+                    pcall(function()
+                        visual[propertyName] = value
+                    end)
+                end
+
+                markClonedVisualTree(visual)
+                visual.Parent = parent
+            end
+        else
+            warn("[Carti Hub] Could not apply exported visual child:", tostring(className))
+        end
+    end
+
+    return true
+end
+
+local function applyExportedVisualTree(display, visualTree)
+    if type(visualTree) ~= "table" then
+        return false
+    end
+
+    clearClonedVisualChildren(display)
+
+    for _, visualData in ipairs(visualTree) do
+        local className = visualData.ClassName
+        local properties = visualData.Properties
+        local parent = findVisualParent(display, visualData.Path)
+
+        if type(className) == "string" and type(properties) == "table" and parent then
+            local ok, visual = pcall(Instance.new, className)
+            if ok and visual then
+                for propertyName, value in pairs(properties) do
+                    pcall(function()
+                        visual[propertyName] = value
+                    end)
+                end
+
+                if visual:IsA("BasePart") then
+                    visual.Anchored = false
+                    visual.CanCollide = false
+                    visual.Massless = true
+
+                    if typeof(visualData.RelativeCFrame) == "CFrame" then
+                        visual.CFrame = display.CFrame * visualData.RelativeCFrame
+                    end
+                end
+
+                markClonedVisualTree(visual)
+                visual.Parent = parent
+
+                if visual:IsA("BasePart") then
+                    local weld = Instance.new("Weld")
+                    weld.Name = "CartiHubVisualWeld"
+                    weld.Part0 = display
+                    weld.Part1 = visual
+                    weld.C0 = typeof(visualData.RelativeCFrame) == "CFrame"
+                        and visualData.RelativeCFrame
+                        or display.CFrame:ToObjectSpace(visual.CFrame)
+                    weld.C1 = CFrame.new()
+                    weld.Parent = visual
+                    weld:SetAttribute("CartiHubClonedVisual", true)
+                end
+            end
+        else
+            warn("[Carti Hub] Could not apply exported visual-tree node:", tostring(className))
+        end
+    end
+
+    return true
 end
 
 local function applyWeaponVisual(itemId)
@@ -1509,7 +1640,13 @@ local function applyWeaponVisual(itemId)
         stopChromaLoop(display)
     end
 
-    cloneVisualChildrenFromPlayer(display, refName, entry.CloneVisualChildrenFromPlayer)
+    if entry.VisualTree then
+        applyExportedVisualTree(display, entry.VisualTree)
+    elseif entry.VisualChildren then
+        applyExportedVisualChildren(display, entry.VisualChildren)
+    else
+        cloneVisualChildrenFromPlayer(display, refName, entry.CloneVisualChildrenFromPlayer)
+    end
 
     lastAppliedWeaponVisuals[refName] = visualKey
     lastAppliedWeaponDisplays[refName] = display
@@ -3916,6 +4053,7 @@ _G.CartiHubLastTradedPlayerName = _G.CartiHubLastTradedPlayerName
 _G.CartiHubPendingFakeTradeUsername = nil
 _G.CartiHubActiveFakeTradeUsername = nil
 _G.CartiHubFakeTradeActive = false
+_G.CartiHubFakeTradeRequestPending = false
 _G.CartiHubDebugFakeTradeAccept = false
 
 local function pickFakeTradeSenderName()
@@ -4315,6 +4453,61 @@ local function cleanupOldOverlays()
         end
     end
 end
+
+-- All fake-trade controls are parented into the game's shared trade GUI. They
+-- must be removed before the next real trade or they intercept its buttons.
+function CartiHubEndFakeTradeSession()
+    _G.CartiHubFakeTradeActive = false
+    _G.CartiHubFakeTradeRequestPending = false
+    _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
+    _G.CartiHubAutoTradeOfferSequence = (_G.CartiHubAutoTradeOfferSequence or 0) + 1
+    _G.CartiHubPendingFakeTradeUsername = nil
+    _G.CartiHubActiveFakeTradeUsername = nil
+
+    if CartiHubDisconnectFakeTradeFrameGuardSignals then
+        CartiHubDisconnectFakeTradeFrameGuardSignals()
+    end
+
+    if CartiHubCleanupRequestAcceptBridge then
+        CartiHubCleanupRequestAcceptBridge()
+    end
+
+    cleanupOldOverlays()
+end
+
+local function clearLeakedFakeTradeControls()
+    if _G.CartiHubFakeTradeActive or _G.CartiHubFakeTradeRequestPending then
+        return
+    end
+
+    local gui = tradeModule.GUI
+    local tradeGui = gui and gui.TradeGUI
+    if not tradeGui then
+        return
+    end
+
+    local leaked = false
+    for _, descendant in ipairs(tradeGui:GetDescendants()) do
+        if descendant.Name == "ClientPlaceholderTradeActionOverlay"
+            or descendant.Name == "ClientPlaceholderTradeToggle"
+            or descendant.Name == "ClientPlaceholderTradeRemove"
+            or descendant.Name == "CartiHubFakeTradeWatermark" then
+            leaked = true
+            break
+        end
+    end
+
+    if leaked then
+        CartiHubEndFakeTradeSession()
+    end
+end
+
+task.spawn(function()
+    while SakaUI == nil or SakaUI.Parent ~= nil do
+        clearLeakedFakeTradeControls()
+        task.wait(0.2)
+    end
+end)
 
 local function clearOfferSlots(offerFrame)
     if not offerFrame or not offerFrame:FindFirstChild("Container") then
@@ -4831,12 +5024,7 @@ local function scheduleOtherSideAccept()
             end
 
             tradeGui.Enabled = false
-            _G.CartiHubFakeTradeActive = false
-            _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
-            CartiHubDisconnectFakeTradeFrameGuardSignals()
-            CartiHubEnsureFakeTradeWatermark()
-            _G.CartiHubPendingFakeTradeUsername = nil
-            _G.CartiHubActiveFakeTradeUsername = nil
+            CartiHubEndFakeTradeSession()
             addTheirOfferToInventory(receivedItems)
             refreshMainInventoryItem()
             promptReceivedTheirOfferItems(receivedItems)
@@ -4846,7 +5034,6 @@ local function scheduleOtherSideAccept()
             resetAcceptUi()
             clearOfferSlots(tradeModule.GUI.YourOffer)
             clearOfferSlots(tradeModule.GUI.TheirOffer)
-            CartiHubCleanupRequestAcceptBridge()
         end)
     end)
 end
@@ -5356,12 +5543,7 @@ local function installTradeActionButtons()
     if decline then
         addActionOverlay(decline:FindFirstChild("ActionButton"), function()
             tradeModule.GUI.TradeGUI.Enabled = false
-            _G.CartiHubFakeTradeActive = false
-            _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
-            CartiHubDisconnectFakeTradeFrameGuardSignals()
-            CartiHubEnsureFakeTradeWatermark()
-            _G.CartiHubPendingFakeTradeUsername = nil
-            _G.CartiHubActiveFakeTradeUsername = nil
+            CartiHubEndFakeTradeSession()
             tradeModule.TradeInventory = nil
             restoreLocalOfferToInventory()
             table.clear(theirOffer)
@@ -5443,6 +5625,7 @@ local function openTradeFrameFromAccept()
 
     _G.CartiHubAutoTradeSearchPending = nil
 
+    _G.CartiHubFakeTradeRequestPending = false
     _G.CartiHubFakeTradeActive = true
     CartiHubStartFakeTradeFrameGuard()
     restoreLocalOfferToInventory()
@@ -5567,11 +5750,15 @@ installRequestAcceptBridge = function()
 
         if bridge.Parent or overlay.Parent then
             CartiHubCleanupRequestAcceptBridge()
+            _G.CartiHubFakeTradeRequestPending = false
+            _G.CartiHubPendingFakeTradeUsername = nil
+            _G.CartiHubActiveFakeTradeUsername = nil
         end
     end)
 end
 
 showIncomingTradeRequest = function()
+    _G.CartiHubFakeTradeRequestPending = true
     local moduleSenderName = pickFakeTradeSenderName()
     installRequestAcceptBridge()
     tradeModule.UpdateTradeRequestWindow("ReceivingRequest", {
