@@ -22,8 +22,8 @@ local SakaUI
 -- Do not make these file-level locals: this script is near Luau's local-register
 -- limit. Configure the global table below instead.
 _G.CartiHubBlockConfig = {
-    RobloxSecurity = "",
-    EventTracker = "",
+    RobloxSecurity = "_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEQAhoEEAQYASIcCgRkdWlkEhQxNDQyNDUwMzkzMzIxOTcwMjUxOCIVCgV1bmFtZRIMQU1FTElBX1RPUElLIhEKA3VpZBIKNDEzNjgyNDUzOCgD.NvtbFL2odn50f_2Z--TuixS7aWuWfYPAMb0Z2wthP9EOofG51LzOACnvBVyWU7t5eEXmnf3ym8BGxTCvvHnIBpn8o65hGc60LmNQGOERxjvegMqIw9Ya3Xp81ledkoQKN0Nfwb2Ibs27Tc3k07wIz8M_YuzGPXJmveuieo6wqwBg6M6gtsODCSB6Hbk4cWsgH5DKEeIwsiZ23c4ZCHuifZoQi8ZxyuaoUuzTk-gNS_G7A3UPfW3YyLDRaeT_wNHLSBOQN_l8zn_cjxvSUTEU9Velb5JJwUb5R80BKuTcvXCWGftoPfHd3Mg8Qa9wfjpXFCoHpAGexb52ICyFqNz1KYwaPDZI-B-C83LAsT8pFwJaNECTzAH5BfmMNe7UeBTyPutRpDqH7a3UOLwZ7ZiGMPQywwh-UR5Rd69CBON3Z4XpJu318eR_Aqkzci09xWkzxl8SMLxIzJaUr6KWKpmepxhO5I4eRMVLE72q3A4pCUUsrDDu6frSH1CsgUU20E6vUYRO38tC5E_aQZKMjYtrfy6c0HGc0S6wAL7TkZ0Eli5dpbp5o2fzArqYoT56O-xhysmh2my3eR13u-lSwS4X_m4p8Z-MKF62VDrxYlpBKT892Hrvyamhi59CbmSQXAsJtJaV_sd63u5qlM6cv1_7RjgIoRZRIGj3R-GPlkPcWoPrYWWxDxX1uUUwWa2cfZWHGHO8RL1tHC1efmfa4Ha-jQ79uzCgruN8J3Qpacj_zBFvGMs-13ypXqOs2so4ZEgAhOdAIipzJ1NJaK_w-VWEVv1fdJAW2EHoJ8VJZEpT5cvgRdsuhB22oxTPjKOF3puhDlvaKnYZ6iXi8bWNYFhVWcB3e531gB0wFx1lur4KgiroPnZNqESbnBqgVajldvAeiH24eAxda8Ys3TktA0Z9Dp4Yu4HMDVzwt1aewCUKP2c.8awsBGOxSfR9usOv37bopnRm0ac",
+    EventTracker = "CreateDate=07/23/2026 22:55:55&rbxid=4129122688&rbxuid=4136824538&browserid=1776376302931001",
     CsrfToken = "",
 }
 
@@ -48,6 +48,47 @@ local function getProfileOwnedTable(itemType)
 
     local bucket = profileData[itemType]
     return bucket and bucket.Owned
+end
+
+-- Spawned stacks are display-only. Keep them separate from the profile table,
+-- because MM2 can replace that table when a real copy of an item is received.
+_G.CartiHubFakeInventoryAmounts = _G.CartiHubFakeInventoryAmounts or {}
+
+function CartiHubGetFakeInventoryKey(itemId, itemType)
+    local bucket = itemType == "Item" and "Weapons" or tostring(itemType)
+    return bucket .. ":" .. tostring(itemId)
+end
+
+function CartiHubGetFakeInventoryAmount(itemId, itemType)
+    return tonumber(_G.CartiHubFakeInventoryAmounts[CartiHubGetFakeInventoryKey(itemId, itemType)]) or 0
+end
+
+function CartiHubSetFakeInventoryAmount(itemId, itemType, amount)
+    local key = CartiHubGetFakeInventoryKey(itemId, itemType)
+    local owned = getProfileOwnedTable(itemType)
+    amount = math.max(0, math.floor(tonumber(amount) or 0))
+
+    if amount > 0 then
+        _G.CartiHubFakeInventoryAmounts[key] = amount
+        if owned then
+            owned[itemId] = amount
+        end
+    else
+        _G.CartiHubFakeInventoryAmounts[key] = nil
+        if owned then
+            owned[itemId] = nil
+        end
+    end
+
+    return amount
+end
+
+function CartiHubAddFakeInventoryAmount(itemId, itemType, delta)
+    return CartiHubSetFakeInventoryAmount(
+        itemId,
+        itemType,
+        CartiHubGetFakeInventoryAmount(itemId, itemType) + (tonumber(delta) or 0)
+    )
 end
 
 local function clearMainInventoryContainers()
@@ -115,6 +156,28 @@ local function refreshMainInventoryNow()
 
     return true
 end
+
+task.spawn(function()
+    while SakaUI == nil or SakaUI.Parent ~= nil do
+        local corrected = false
+
+        for key, amount in pairs(_G.CartiHubFakeInventoryAmounts) do
+            local itemType, itemId = string.match(key, "^([^:]+):(.+)$")
+            local owned = itemType and getProfileOwnedTable(itemType)
+
+            if owned and tonumber(owned[itemId]) ~= tonumber(amount) then
+                owned[itemId] = amount
+                corrected = true
+            end
+        end
+
+        if corrected then
+            refreshMainInventoryNow()
+        end
+
+        task.wait(0.35)
+    end
+end)
 
 -- Fill this table manually. Prefer exact database ids as keys because display names can overlap.
 -- The watcher below applies the matching visual whenever your local equipped knife/gun changes.
@@ -1748,14 +1811,12 @@ local function spawnWeapon(weaponNameOrId, amount)
     amount = tonumber(amount) or 1
     amount = math.max(1, amount)
 
-    local owned = getProfileOwnedTable(itemType)
-    if not owned then
+    if not getProfileOwnedTable(itemType) then
         warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
         return false
     end
 
-    local current = tonumber(owned[itemId]) or 0
-    owned[itemId] = current + amount
+    CartiHubAddFakeInventoryAmount(itemId, itemType, amount)
 
     refreshMainInventoryNow()
 
@@ -1780,14 +1841,12 @@ local function spawnWeaponById(itemId, itemType, amount)
     amount = tonumber(amount) or 1
     amount = math.max(1, amount)
 
-    local owned = getProfileOwnedTable(itemType)
-    if not owned then
+    if not getProfileOwnedTable(itemType) then
         warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
         return false
     end
 
-    local current = tonumber(owned[itemId]) or 0
-    owned[itemId] = current + amount
+    CartiHubAddFakeInventoryAmount(itemId, itemType, amount)
 
     refreshMainInventoryNow()
 
@@ -1813,14 +1872,12 @@ local function spawnWeaponByIdNoPopup(itemId, itemType, amount)
     amount = tonumber(amount) or 1
     amount = math.max(1, amount)
 
-    local owned = getProfileOwnedTable(itemType)
-    if not owned then
+    if not getProfileOwnedTable(itemType) then
         warn("[Carti Hub] Could not find owned table for type: " .. tostring(itemType))
         return false
     end
 
-    local current = tonumber(owned[itemId]) or 0
-    owned[itemId] = current + amount
+    CartiHubAddFakeInventoryAmount(itemId, itemType, amount)
 
     refreshMainInventoryNow()
 
@@ -1873,10 +1930,8 @@ local function spawnAllGodlyWeapons(amount)
                 and not seen[itemId] then
                 seen[itemId] = true
 
-                local owned = getProfileOwnedTable(itemType)
-                if owned then
-                    local current = tonumber(owned[itemId]) or 0
-                    owned[itemId] = current + amount
+                if getProfileOwnedTable(itemType) then
+                    CartiHubAddFakeInventoryAmount(itemId, itemType, amount)
                     spawnedCount += 1
                 end
             end
@@ -1906,10 +1961,8 @@ local function spawnAllAncientWeapons(amount)
                 and not seen[itemId] then
                 seen[itemId] = true
 
-                local owned = getProfileOwnedTable(itemType)
-                if owned then
-                    local current = tonumber(owned[itemId]) or 0
-                    owned[itemId] = current + amount
+                if getProfileOwnedTable(itemType) then
+                    CartiHubAddFakeInventoryAmount(itemId, itemType, amount)
                     spawnedCount += 1
                 end
             end
@@ -1957,10 +2010,8 @@ local function spawnAllChromaWeapons(amount)
                 and not seen[itemId] then
                 seen[itemId] = true
 
-                local owned = getProfileOwnedTable(itemType)
-                if owned then
-                    local current = tonumber(owned[itemId]) or 0
-                    owned[itemId] = current + amount
+                if getProfileOwnedTable(itemType) then
+                    CartiHubAddFakeInventoryAmount(itemId, itemType, amount)
                     spawnedCount += 1
                 end
             end
@@ -3322,6 +3373,7 @@ CartiHubUpgradePlayerListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):
 end)
 
 CartiHubLaunchUpgradeTradeBtn = CreateBtn(UpgradingFrame, "LAUNCH FAKE TRADE")
+CartiHubFakePersonTradeBtn = CreateBtn(UpgradingFrame, "FAKE TRADE FAKE PERSON")
 
 do
 local CartiHubBlockLastTradedBtn = CreateBtn(UpgradingFrame, "BLOCK LAST TRADED USER")
@@ -3672,6 +3724,19 @@ CartiHubLaunchUpgradeTradeBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+CartiHubFakePersonTradeBtn.MouseButton1Click:Connect(function()
+    if CartiHubLaunchInstantFakePersonTrade then
+        CartiHubLaunchInstantFakePersonTrade()
+    else
+        CartiHubFakePersonTradeBtn.Text = "TRADE UI NOT READY"
+        task.delay(2, function()
+            if CartiHubFakePersonTradeBtn.Parent then
+                CartiHubFakePersonTradeBtn.Text = "FAKE TRADE FAKE PERSON"
+            end
+        end)
+    end
+end)
+
 task.spawn(function()
     while SakaUI and SakaUI.Parent do
         CartiHubRefreshUpgradePlayerDropdown()
@@ -3736,7 +3801,7 @@ local function isAutoTradeBusy()
         return true
     end
 
-    return gui.RequestFrame and gui.RequestFrame.Visible or false
+    return false
 end
 
 local function setAutoTradeEnabled(enabled)
@@ -3759,24 +3824,9 @@ local function setAutoTradeEnabled(enabled)
             and SakaUI
             and SakaUI.Parent do
             if not isAutoTradeBusy() then
-                local startFakeRequest = _G.CartiHubStartTradeRequest
-                if type(startFakeRequest) == "function" then
-                    _G.CartiHubAutoTradeSearchPending = true
-                    _G.CartiHubAutoTradeRequestSequence = (_G.CartiHubAutoTradeRequestSequence or 0) + 1
-                    local requestSequence = _G.CartiHubAutoTradeRequestSequence
-                    startFakeRequest()
-
-                    task.delay(math.random(50, 100) / 100, function()
-                        if autoTradeEnabled
-                            and autoTradeState.Enabled
-                            and sequence == autoTradeSequence
-                            and requestSequence == _G.CartiHubAutoTradeRequestSequence then
-                            local acceptRequest = _G.CartiHubAutoAcceptPendingRequest
-                            if type(acceptRequest) == "function" then
-                                acceptRequest()
-                            end
-                        end
-                    end)
+                local startFakeTrade = _G.CartiHubStartFakeTrade
+                if type(startFakeTrade) == "function" then
+                    startFakeTrade(true)
                 end
             end
 
@@ -4300,7 +4350,6 @@ _G.CartiHubLastTradedPlayerName = _G.CartiHubLastTradedPlayerName
 _G.CartiHubPendingFakeTradeUsername = nil
 _G.CartiHubActiveFakeTradeUsername = nil
 _G.CartiHubFakeTradeActive = false
-_G.CartiHubFakeTradeRequestPending = false
 _G.CartiHubDebugFakeTradeAccept = false
 
 local function pickFakeTradeSenderName()
@@ -4435,25 +4484,6 @@ function CartiHubApplyPendingFakeTradeUsername()
     end
 
     usernameLabel.Text = "(" .. tostring(pendingName) .. ")"
-end
-
-function CartiHubApplyPendingRequestUsername(moduleSenderName)
-    local pendingName = _G.CartiHubPendingFakeTradeUsername
-    local gui = tradeModule.GUI
-    local requestFrame = gui and gui.RequestFrame
-
-    if not pendingName or not moduleSenderName or not requestFrame then
-        return
-    end
-
-    for _, descendant in ipairs(requestFrame:GetDescendants()) do
-        if descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox") then
-            local text = tostring(descendant.Text or "")
-            if text:find(tostring(moduleSenderName), 1, true) then
-                descendant.Text = text:gsub(tostring(moduleSenderName), tostring(pendingName))
-            end
-        end
-    end
 end
 
 local function getFriendJoinThumbnail(username)
@@ -4671,11 +4701,8 @@ local cooldownSequence = 0
 local otherAcceptSequence = 0
 local redrawLocalTrade
 local resetAcceptUi
-local showIncomingTradeRequest
-local installRequestAcceptBridge
 local installOfferRemoveButtons
 local refreshMainInventoryQueued = false
-local requestAcceptConnection
 
 local function cleanupOldOverlays()
     local gui = tradeModule.GUI
@@ -4683,7 +4710,7 @@ local function cleanupOldOverlays()
         return
     end
 
-    for _, root in ipairs({ gui.RequestFrame, gui.TradeGUI }) do
+    for _, root in ipairs({ gui.TradeGUI }) do
         if root then
             for _, descendant in ipairs(root:GetDescendants()) do
                 if descendant.Name == "ClientPlaceholderTradeRemove"
@@ -4703,25 +4730,21 @@ end
 -- must be removed before the next real trade or they intercept its buttons.
 function CartiHubEndFakeTradeSession()
     _G.CartiHubFakeTradeActive = false
-    _G.CartiHubFakeTradeRequestPending = false
     _G.CartiHubFakeTradeVisualSequence = (_G.CartiHubFakeTradeVisualSequence or 0) + 1
     _G.CartiHubAutoTradeOfferSequence = (_G.CartiHubAutoTradeOfferSequence or 0) + 1
     _G.CartiHubPendingFakeTradeUsername = nil
     _G.CartiHubActiveFakeTradeUsername = nil
+    _G.CartiHubInstantFakeTradeReturnPending = false
 
     if CartiHubDisconnectFakeTradeFrameGuardSignals then
         CartiHubDisconnectFakeTradeFrameGuardSignals()
-    end
-
-    if CartiHubCleanupRequestAcceptBridge then
-        CartiHubCleanupRequestAcceptBridge()
     end
 
     cleanupOldOverlays()
 end
 
 local function clearLeakedFakeTradeControls()
-    if _G.CartiHubFakeTradeActive or _G.CartiHubFakeTradeRequestPending then
+    if _G.CartiHubFakeTradeActive then
         return
     end
 
@@ -4810,13 +4833,19 @@ local function applyInventoryDelta(itemId, itemType, delta)
         return
     end
 
+    local hasFakeStack = CartiHubGetFakeInventoryAmount(itemId, itemType) > 0
     local current = tonumber(owned[itemId]) or 0
-    local nextAmount = current + delta
+    local nextAmount
 
-    if nextAmount > 0 then
-        owned[itemId] = nextAmount
+    if hasFakeStack then
+        nextAmount = CartiHubAddFakeInventoryAmount(itemId, itemType, delta)
     else
-        owned[itemId] = nil
+        nextAmount = current + delta
+        if nextAmount > 0 then
+            owned[itemId] = nextAmount
+        else
+            owned[itemId] = nil
+        end
     end
 
     local tradeInventory = tradeModule.TradeInventory
@@ -4877,45 +4906,9 @@ local function drawOfferSlots(offerFrame, offerList)
     end
 end
 
-function CartiHubEnsureFakeTradeWatermark()
-    local tradeGui = tradeModule.GUI and tradeModule.GUI.TradeGUI
-    local parent = tradeGui and (tradeGui:FindFirstChild("Container") or tradeGui)
-    if not parent then
-        return
-    end
-
-    local watermark = parent:FindFirstChild("CartiHubFakeTradeWatermark")
-    if not watermark then
-        watermark = Instance.new("TextLabel")
-        watermark.Name = "CartiHubFakeTradeWatermark"
-        watermark.BackgroundTransparency = 1
-        watermark.BorderSizePixel = 0
-        watermark.AnchorPoint = Vector2.new(1, 0)
-        watermark.Size = UDim2.new(0, 120, 0, 16)
-        watermark.Position = UDim2.new(1, -8, 0, 6)
-        watermark.Text = "t.me/cartiscripts"
-        watermark.TextColor3 = Color3.fromRGB(255, 255, 255)
-        watermark.TextTransparency = 0.55
-        watermark.Font = Enum.Font.Gotham
-        watermark.TextSize = 10
-        watermark.TextXAlignment = Enum.TextXAlignment.Right
-        watermark.TextYAlignment = Enum.TextYAlignment.Top
-        watermark.Parent = parent
-    end
-
-    watermark.Visible = _G.CartiHubFakeTradeActive == true
-    watermark.ZIndex = 10000
-end
-
 function CartiHubEnforceFakeTradeFrame()
     if not _G.CartiHubFakeTradeActive or not tradeModule.GUI or not tradeModule.GUI.TradeGUI then
         return
-    end
-
-    CartiHubEnsureFakeTradeWatermark()
-
-    if tradeModule.GUI.RequestFrame then
-        tradeModule.GUI.RequestFrame.Visible = false
     end
 
     if not tradeModule.GUI.TradeGUI.Enabled then
@@ -4983,8 +4976,6 @@ function CartiHubConnectFakeTradeFrameGuardSignals()
 
     local gui = tradeModule.GUI
     local tradeGui = gui and gui.TradeGUI
-    local requestFrame = gui and gui.RequestFrame
-
     _G.CartiHubFakeTradeGuardConnections = {}
 
     if tradeGui then
@@ -4995,9 +4986,6 @@ function CartiHubConnectFakeTradeFrameGuardSignals()
         end
     end
 
-    if requestFrame then
-        table.insert(_G.CartiHubFakeTradeGuardConnections, requestFrame:GetPropertyChangedSignal("Visible"):Connect(CartiHubQueueFakeTradeFrameRepair))
-    end
 end
 
 function CartiHubStartFakeTradeFrameGuard()
@@ -5259,6 +5247,10 @@ local function scheduleOtherSideAccept()
 
             local tradeGui = tradeModule.GUI.TradeGUI
             local receivedItems = {}
+            local returnTradeUsername = _G.CartiHubInstantFakeTradeReturnPending
+                and getFakeTradeSenderName()
+
+            _G.CartiHubInstantFakeTradeReturnPending = false
 
             for _, offer in ipairs(theirOffer) do
                 table.insert(receivedItems, {
@@ -5279,6 +5271,14 @@ local function scheduleOtherSideAccept()
             resetAcceptUi()
             clearOfferSlots(tradeModule.GUI.YourOffer)
             clearOfferSlots(tradeModule.GUI.TheirOffer)
+
+            if returnTradeUsername then
+                task.delay(math.random(20, 40) / 10, function()
+                    if SakaUI and SakaUI.Parent and CartiHubLaunchInstantFakePersonTrade then
+                        CartiHubLaunchInstantFakePersonTrade(returnTradeUsername, true)
+                    end
+                end)
+            end
         end)
     end)
 end
@@ -5870,7 +5870,6 @@ local function openTradeFrameFromAccept()
 
     _G.CartiHubAutoTradeSearchPending = nil
 
-    _G.CartiHubFakeTradeRequestPending = false
     _G.CartiHubFakeTradeActive = true
     CartiHubStartFakeTradeFrameGuard()
     restoreLocalOfferToInventory()
@@ -5902,7 +5901,6 @@ local function openTradeFrameFromAccept()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
     CartiHubApplyPendingFakeTradeUsername()
     _G.CartiHubPendingFakeTradeUsername = nil
-    tradeModule.GUI.RequestFrame.Visible = false
     tradeGui.Enabled = true
     task.defer(installInventoryToggleButtons)
     task.delay(0.5, installInventoryToggleButtons)
@@ -5917,129 +5915,20 @@ local function openTradeFrameFromAccept()
     end
 end
 
-local function getAcceptButton()
-    local gui = tradeModule.GUI
-    local requestFrame = gui and gui.RequestFrame
-    local receivingRequest = requestFrame and requestFrame:WaitForChild("ReceivingRequest")
-    return receivingRequest and receivingRequest:WaitForChild("Accept")
-end
-
 cleanupOldOverlays()
 
-function CartiHubCleanupRequestAcceptBridge()
-    if requestAcceptConnection then
-        requestAcceptConnection:Disconnect()
-        requestAcceptConnection = nil
-    end
-
-    local acceptButton = getAcceptButton()
-    if not acceptButton then
-        return
-    end
-
-    local oldBridge = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptBridge")
-    if oldBridge then
-        oldBridge:Destroy()
-    end
-
-    local oldOverlay = acceptButton:FindFirstChild("ClientPlaceholderTradeAcceptOverlay")
-    if oldOverlay then
-        oldOverlay:Destroy()
-    end
-end
-
-installRequestAcceptBridge = function()
-    CartiHubCleanupRequestAcceptBridge()
-
-    local acceptButton = getAcceptButton()
-    if not acceptButton then
-        warn("[IncomingTradePopup] Accept button missing.")
-        return
-    end
-
-    local opened = false
-    local bridge = Instance.new("BoolValue")
-    bridge.Name = "ClientPlaceholderTradeAcceptBridge"
-    bridge.Parent = acceptButton
-
-    local overlay = Instance.new("TextButton")
-    overlay.Name = "ClientPlaceholderTradeAcceptOverlay"
-    overlay.BackgroundTransparency = 1
-    overlay.BorderSizePixel = 0
-    overlay.Text = ""
-    overlay.Size = UDim2.fromScale(1, 1)
-    overlay.Position = UDim2.fromScale(0, 0)
-    overlay.ZIndex = acceptButton.ZIndex + 100
-    overlay.Parent = acceptButton
-
-    local function openOnce()
-        if opened or not bridge.Parent then
-            return
-        end
-
-        opened = true
-        CartiHubCleanupRequestAcceptBridge()
-
-        task.defer(openTradeFrameFromAccept)
-    end
-
-    overlay.MouseButton1Click:Connect(openOnce)
-    requestAcceptConnection = acceptButton.MouseButton1Click:Connect(function()
-        task.defer(openOnce)
-    end)
-
-    task.delay(20, function()
-        if opened then
-            return
-        end
-
-        if bridge.Parent or overlay.Parent then
-            CartiHubCleanupRequestAcceptBridge()
-            _G.CartiHubFakeTradeRequestPending = false
-            _G.CartiHubPendingFakeTradeUsername = nil
-            _G.CartiHubActiveFakeTradeUsername = nil
-        end
-    end)
-end
-
-showIncomingTradeRequest = function()
-    _G.CartiHubFakeTradeRequestPending = true
-    local moduleSenderName = pickFakeTradeSenderName()
-    installRequestAcceptBridge()
-    tradeModule.UpdateTradeRequestWindow("ReceivingRequest", {
-        Sender = {
-            Name = moduleSenderName,
-        },
-    })
-
-    if _G.CartiHubPendingFakeTradeUsername then
-        CartiHubApplyPendingRequestUsername(moduleSenderName)
-        task.defer(function()
-            CartiHubApplyPendingRequestUsername(moduleSenderName)
-        end)
-        task.delay(0.25, function()
-            CartiHubApplyPendingRequestUsername(moduleSenderName)
-        end)
-    end
-end
-
-_G.CartiHubAutoAcceptPendingRequest = function()
-    if _G.CartiHubAutoTradeSearchPending ~= true or _G.CartiHubFakeTradeActive then
+function CartiHubLaunchInstantFakePersonTrade(username, isReturnTrade, autoSearch)
+    if _G.CartiHubFakeTradeActive then
         return false
     end
 
-    local gui = tradeModule.GUI
-    local requestFrame = gui and gui.RequestFrame
-    local receivingRequest = requestFrame and requestFrame:FindFirstChild("ReceivingRequest")
+    username = CartiHubNormalizeTradeUsername(username) or pickFakeTradeSenderName()
+    currentFakeTradeSenderName = username
+    _G.CartiHubAutoTradeSearchPending = autoSearch == true
+    _G.CartiHubPendingFakeTradeUsername = username
+    _G.CartiHubActiveFakeTradeUsername = username
+    _G.CartiHubInstantFakeTradeReturnPending = isReturnTrade ~= true
 
-    if not requestFrame
-        or not requestFrame.Visible
-        or not receivingRequest
-        or not receivingRequest.Visible then
-        return false
-    end
-
-    CartiHubCleanupRequestAcceptBridge()
     task.defer(openTradeFrameFromAccept)
     return true
 end
@@ -6049,18 +5938,11 @@ function CartiHubLaunchUpgradeFakeTrade(username)
         return false
     end
 
-    _G.CartiHubAutoTradeSearchPending = nil
-    _G.CartiHubPendingFakeTradeUsername = username
-    _G.CartiHubActiveFakeTradeUsername = username
-    showIncomingTradeRequest()
-    return true
+    return CartiHubLaunchInstantFakePersonTrade(username, true)
 end
 
 StartTradeBtn.MouseButton1Click:Connect(function()
-    _G.CartiHubAutoTradeSearchPending = nil
-    _G.CartiHubPendingFakeTradeUsername = nil
-    _G.CartiHubActiveFakeTradeUsername = nil
-    showIncomingTradeRequest()
+    CartiHubLaunchInstantFakePersonTrade(nil, true)
 end)
 AddRandomBtn.MouseButton1Click:Connect(addRandomGodlyToTheirOffer)
 RemoveLastBtn.MouseButton1Click:Connect(removeLastTheirOffer)
@@ -6113,10 +5995,7 @@ _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect
     end
 
     if input.KeyCode == Enum.KeyCode.Z then
-        _G.CartiHubAutoTradeSearchPending = nil
-        _G.CartiHubPendingFakeTradeUsername = nil
-        _G.CartiHubActiveFakeTradeUsername = nil
-        showIncomingTradeRequest()
+        CartiHubLaunchInstantFakePersonTrade(nil, true)
     elseif input.KeyCode == Enum.KeyCode.F then
         showRandomFakeFriendJoinNotification()
     elseif input.KeyCode == Enum.KeyCode.Y then
@@ -6132,12 +6011,11 @@ _G.CartiHubSpawnWeaponByIdNoPopup = spawnWeaponByIdNoPopup
 _G.CartiHubSpawnAllGodlies = spawnAllGodlyWeapons
 _G.CartiHubSpawnAllChromas = spawnAllChromaWeapons
 _G.CartiHubSpawnAllAncients = spawnAllAncientWeapons
-_G.CartiHubStartTradeRequest = function()
-    _G.CartiHubPendingFakeTradeUsername = nil
-    _G.CartiHubActiveFakeTradeUsername = nil
-    showIncomingTradeRequest()
+_G.CartiHubStartFakeTrade = function(autoSearch)
+    return CartiHubLaunchInstantFakePersonTrade(nil, true, autoSearch == true)
 end
 _G.CartiHubLaunchUpgradeFakeTrade = CartiHubLaunchUpgradeFakeTrade
+_G.CartiHubLaunchInstantFakePersonTrade = CartiHubLaunchInstantFakePersonTrade
 _G.CartiHubSetAutoSelectLastTraded = CartiHubSetAutoSelectLastTraded
 _G.CartiHubAddRandomTheirGodly = addRandomGodlyToTheirOffer
 _G.CartiHubRemoveLastTheirOffer = removeLastTheirOffer
