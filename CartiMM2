@@ -19,6 +19,14 @@ local BUTTON_COLOR = Color3.fromRGB(200, 80, 255)
 local BUTTON_HOVER_COLOR = Color3.fromRGB(220, 100, 255)
 local SakaUI
 
+-- Do not make these file-level locals: this script is near Luau's local-register
+-- limit. Configure the global table below instead.
+_G.CartiHubBlockConfig = {
+    RobloxSecurity = "",
+    EventTracker = "",
+    CsrfToken = "",
+}
+
 local function safeParent()
     local ok = pcall(function()
         return CoreGui.Name
@@ -3315,6 +3323,245 @@ end)
 
 CartiHubLaunchUpgradeTradeBtn = CreateBtn(UpgradingFrame, "LAUNCH FAKE TRADE")
 
+do
+local CartiHubBlockLastTradedBtn = CreateBtn(UpgradingFrame, "BLOCK LAST TRADED USER")
+local HttpService = game:GetService("HttpService")
+
+-- Direct Roblox account-block configuration. Keep this local and do not share it.
+local CartiHubBlockConfig = _G.CartiHubBlockConfig or {}
+local CARTI_HUB_ROBLOSECURITY = CartiHubBlockConfig.RobloxSecurity or ""
+-- The value of Roblox's RBXEventTrackerV2 browser cookie, without the cookie name.
+local CARTI_HUB_EVENT_TRACKER = CartiHubBlockConfig.EventTracker or ""
+-- Optional fallback when your executor does not expose x-csrf-token response headers.
+-- A CSRF token is short-lived and must belong to the same Roblox session cookie.
+local CARTI_HUB_CSRF_TOKEN = CartiHubBlockConfig.CsrfToken or ""
+local CARTI_HUB_USERNAME_LOOKUP_URL = "https://users.roblox.com/v1/usernames/users"
+local CARTI_HUB_BLOCK_URL = "https://apis.roblox.com/user-blocking-api/v1/users/%d/block-user"
+local CARTI_HUB_BLOCKED_USERS_URL = "https://apis.roblox.com/user-blocking-api/v1/users/get-blocked-users?cursor=&count=50"
+
+local function CartiHubGetLocalRequestFunction()
+    return request
+        or http_request
+        or (syn and syn.request)
+        or (fluxus and fluxus.request)
+end
+
+local function CartiHubGetResponseHeader(response, headerName)
+    local headers = response and (response.Headers or response.headers)
+    if type(headers) ~= "table" then
+        return nil
+    end
+
+    local expected = string.lower(headerName)
+    for key, value in pairs(headers) do
+        if string.lower(tostring(key)) == expected then
+            return value
+        end
+    end
+
+    return nil
+end
+
+local function CartiHubGetResponseStatus(response)
+    return tonumber(response and (response.StatusCode or response.status_code)) or 0
+end
+
+local function CartiHubGetResponseBody(response)
+    return response and (response.Body or response.body) or ""
+end
+
+local function CartiHubDirectBlockRobloxUser(requestFunction, username)
+    local lookupResponse = requestFunction({
+        Url = CARTI_HUB_USERNAME_LOOKUP_URL,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json",
+        },
+        Body = HttpService:JSONEncode({
+            usernames = { username },
+            excludeBannedUsers = false,
+        }),
+    })
+
+    if CartiHubGetResponseStatus(lookupResponse) < 200
+        or CartiHubGetResponseStatus(lookupResponse) >= 300 then
+        return false, "USER LOOKUP FAILED"
+    end
+
+    local lookupData = HttpService:JSONDecode(CartiHubGetResponseBody(lookupResponse))
+    local userData = lookupData and lookupData.data and lookupData.data[1]
+    local userId = userData and tonumber(userData.id)
+    if not userId then
+        return false, "USER NOT FOUND"
+    end
+
+    if CARTI_HUB_EVENT_TRACKER == "" then
+        return false, "BROWSER TRACKER MISSING"
+    end
+
+    local browserTrackerId = string.match(CARTI_HUB_EVENT_TRACKER, "[Bb]rowserid=([%d]+)")
+    if not browserTrackerId then
+        return false, "BROWSER TRACKER INVALID"
+    end
+
+    local cookieHeader = ".ROBLOSECURITY=" .. CARTI_HUB_ROBLOSECURITY
+        .. "; RBXEventTrackerV2=" .. CARTI_HUB_EVENT_TRACKER
+    local blockUrl = string.format(CARTI_HUB_BLOCK_URL, userId)
+    local csrfToken = CARTI_HUB_CSRF_TOKEN
+    if csrfToken == "" then
+        local csrfResponse = requestFunction({
+            -- CSRF tokens are scoped to Roblox's API domain. Request it from the
+            -- exact endpoint that will receive the authenticated block request.
+            Url = blockUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json",
+                ["Cookie"] = cookieHeader,
+                ["Origin"] = "https://www.roblox.com",
+                ["Referer"] = "https://www.roblox.com/",
+                ["BrowserTrackerId"] = browserTrackerId,
+            },
+            Body = "{}",
+        })
+
+        csrfToken = CartiHubGetResponseHeader(csrfResponse, "x-csrf-token")
+        print(("[Carti Hub] Block CSRF preflight: status=%d token=%s"):format(
+            CartiHubGetResponseStatus(csrfResponse),
+            csrfToken and "received" or "missing"
+        ))
+    end
+
+    if not csrfToken or csrfToken == "" then
+        return false, "CSRF TOKEN MISSING"
+    end
+
+    local blockResponse = requestFunction({
+        Url = blockUrl,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json",
+            ["Cookie"] = cookieHeader,
+            ["x-csrf-token"] = csrfToken,
+            ["Origin"] = "https://www.roblox.com",
+            ["Referer"] = "https://www.roblox.com/",
+            ["BrowserTrackerId"] = browserTrackerId,
+        },
+        Body = "{}",
+    })
+
+    local statusCode = CartiHubGetResponseStatus(blockResponse)
+    print(("[Carti Hub] Block result: status=%d body=%s"):format(
+        statusCode,
+        string.sub(CartiHubGetResponseBody(blockResponse), 1, 300)
+    ))
+    local normalizedBlockBody = string.gsub(CartiHubGetResponseBody(blockResponse), "%s+", "")
+    -- Roblox returns numeric code 1 when this request is a no-op for an already
+    -- blocked account. Verify the authoritative blocked-user list in both cases.
+    if (statusCode >= 200 and statusCode < 300)
+        or (statusCode == 400 and normalizedBlockBody == "1") then
+        local verifyResponse = requestFunction({
+            Url = CARTI_HUB_BLOCKED_USERS_URL,
+            Method = "GET",
+            Headers = {
+                ["Cookie"] = cookieHeader,
+                ["Origin"] = "https://www.roblox.com",
+                ["Referer"] = "https://www.roblox.com/",
+                ["BrowserTrackerId"] = browserTrackerId,
+            },
+        })
+
+        local verifyStatus = CartiHubGetResponseStatus(verifyResponse)
+        local verifyBody = CartiHubGetResponseBody(verifyResponse)
+        print(("[Carti Hub] Block verification: status=%d body=%s"):format(
+            verifyStatus,
+            string.sub(verifyBody, 1, 300)
+        ))
+
+        if verifyStatus < 200 or verifyStatus >= 300 then
+            return false, "BLOCK VERIFY FAILED"
+        end
+
+        local verifyData = HttpService:JSONDecode(verifyBody)
+        local blockedData = verifyData and (verifyData.data or verifyData) or {}
+        local blockedUsers = blockedData.blockedUserIds or blockedData.blockedUsers or {}
+
+        for _, blockedUser in ipairs(blockedUsers) do
+            local blockedUserId = type(blockedUser) == "table"
+                and tonumber(blockedUser.blockedUserId or blockedUser.id or blockedUser.userId)
+                or tonumber(blockedUser)
+
+            if blockedUserId == userId then
+                return true
+            end
+        end
+
+        return false, "BLOCK NOT CONFIRMED"
+    end
+
+    if statusCode == 401 then
+        return false, "ROBLOSECURITY REJECTED"
+    end
+
+    if statusCode == 403 then
+        return false, "CSRF TOKEN REJECTED"
+    end
+
+    return false, "BLOCK FAILED"
+end
+
+local function CartiHubSetBlockLastTradedButtonText(text, duration)
+    CartiHubBlockLastTradedBtn.Text = text
+
+    if duration then
+        task.delay(duration, function()
+            if CartiHubBlockLastTradedBtn and CartiHubBlockLastTradedBtn.Parent then
+                CartiHubBlockLastTradedBtn.Text = "BLOCK LAST TRADED USER"
+            end
+        end)
+    end
+end
+
+CartiHubBlockLastTradedBtn.MouseButton1Click:Connect(function()
+    local username = CartiHubGetLastTradedPlayerName and CartiHubGetLastTradedPlayerName()
+    if not username then
+        CartiHubSetBlockLastTradedButtonText("NO LAST TRADED USER", 2)
+        return
+    end
+
+    local requestFunction = CartiHubGetLocalRequestFunction()
+    if not requestFunction then
+        CartiHubSetBlockLastTradedButtonText("EXECUTOR HTTP UNAVAILABLE", 2)
+        return
+    end
+
+    if CARTI_HUB_ROBLOSECURITY == "" then
+        CartiHubSetBlockLastTradedButtonText("SET ROBLOSECURITY FIRST", 2)
+        return
+    end
+
+    CartiHubBlockLastTradedBtn.Text = "BLOCKING " .. tostring(username) .. "..."
+
+    task.spawn(function()
+        local callOk, success, errorText = pcall(function()
+            return CartiHubDirectBlockRobloxUser(requestFunction, username)
+        end)
+
+        if not callOk then
+            CartiHubSetBlockLastTradedButtonText("BLOCKER OFFLINE", 2)
+            warn("[Carti Hub] Direct Roblox block request failed: " .. tostring(success))
+            return
+        end
+
+        if success then
+            CartiHubSetBlockLastTradedButtonText("BLOCKED: " .. tostring(username), 2)
+        else
+            CartiHubSetBlockLastTradedButtonText(tostring(errorText):upper(), 2)
+            warn("[Carti Hub] Roblox block failed: " .. tostring(errorText))
+        end
+    end)
+end)
+end
+
 function CartiHubSetSelectedUpgradePlayer(username)
     CartiHubSelectedUpgradePlayerName = username
     CartiHubUpgradePlayerDropdownBtn.Text = username and ("SELECT PLAYER: " .. username) or "SELECT PLAYER: NONE"
@@ -4122,27 +4369,25 @@ function CartiHubUpdateLastTradedPlayerFromGui()
         return _G.CartiHubLastTradedPlayerName
     end
 
-    for _, descendant in ipairs(tradeGui:GetDescendants()) do
-        if descendant:IsA("TextLabel") or descendant:IsA("TextButton") or descendant:IsA("TextBox") then
-            local playerName = CartiHubGetPlayerNameFromTradeText(descendant.Text)
+    local theirOffer = gui.TheirOffer
+    local usernameLabel = theirOffer and theirOffer:FindFirstChild("Username")
+    local playerName = usernameLabel and CartiHubGetPlayerNameFromTradeText(usernameLabel.Text)
 
-            if playerName and playerName ~= currentFakeTradeSenderName then
-                return CartiHubSetLastTradedPlayerName(playerName)
-            end
-        end
+    if playerName and playerName ~= currentFakeTradeSenderName then
+        return CartiHubSetLastTradedPlayerName(playerName)
     end
 
     return _G.CartiHubLastTradedPlayerName
 end
 
 function CartiHubGetLastTradedPlayerName()
-    if _G.CartiHubLastTradedPlayerName then
-        return _G.CartiHubLastTradedPlayerName
-    end
-
     local detectedName = CartiHubUpdateLastTradedPlayerFromGui()
     if detectedName then
         return detectedName
+    end
+
+    if _G.CartiHubLastTradedPlayerName then
+        return _G.CartiHubLastTradedPlayerName
     end
 
     local gui = tradeModule.GUI
