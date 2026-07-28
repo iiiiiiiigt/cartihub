@@ -13,6 +13,24 @@ local profileData = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChi
 local sync = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"))
 local itemPopupService = require(ReplicatedStorage:WaitForChild("ClientServices"):WaitForChild("ItemPopupService"))
 
+-- These entries reference Decal assets in the game database. Inventory cards
+-- need the underlying texture thumbnail rather than the Decal asset itself.
+for _, itemContainer in ipairs({ sync.Weapons, sync.Item }) do
+    if itemContainer then
+        if itemContainer.IcecreamChroma then
+            itemContainer.IcecreamChroma.Image = "rbxthumb://type=Asset&w=150&h=150&id=90300177211738"
+        end
+
+        if itemContainer.BeachyChroma then
+            itemContainer.BeachyChroma.Image = "rbxthumb://type=Asset&w=150&h=150&id=134952503728391"
+        end
+
+        if itemContainer.SandsChroma then
+            itemContainer.SandsChroma.Image = "rbxthumb://type=Asset&w=150&h=150&id=104927341820800"
+        end
+    end
+end
+
 local currentWeaponAmount = 1
 local MAX_WEAPON_AMOUNT = 113
 local BUTTON_COLOR = Color3.fromRGB(200, 80, 255)
@@ -22,8 +40,8 @@ local SakaUI
 -- Do not make these file-level locals: this script is near Luau's local-register
 -- limit. Configure the global table below instead.
 _G.CartiHubBlockConfig = {
-    RobloxSecurity = "_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEQAhoEEAQYASIcCgRkdWlkEhQxNDQyNDUwMzkzMzIxOTcwMjUxOCIVCgV1bmFtZRIMQU1FTElBX1RPUElLIhEKA3VpZBIKNDEzNjgyNDUzOCgD.NvtbFL2odn50f_2Z--TuixS7aWuWfYPAMb0Z2wthP9EOofG51LzOACnvBVyWU7t5eEXmnf3ym8BGxTCvvHnIBpn8o65hGc60LmNQGOERxjvegMqIw9Ya3Xp81ledkoQKN0Nfwb2Ibs27Tc3k07wIz8M_YuzGPXJmveuieo6wqwBg6M6gtsODCSB6Hbk4cWsgH5DKEeIwsiZ23c4ZCHuifZoQi8ZxyuaoUuzTk-gNS_G7A3UPfW3YyLDRaeT_wNHLSBOQN_l8zn_cjxvSUTEU9Velb5JJwUb5R80BKuTcvXCWGftoPfHd3Mg8Qa9wfjpXFCoHpAGexb52ICyFqNz1KYwaPDZI-B-C83LAsT8pFwJaNECTzAH5BfmMNe7UeBTyPutRpDqH7a3UOLwZ7ZiGMPQywwh-UR5Rd69CBON3Z4XpJu318eR_Aqkzci09xWkzxl8SMLxIzJaUr6KWKpmepxhO5I4eRMVLE72q3A4pCUUsrDDu6frSH1CsgUU20E6vUYRO38tC5E_aQZKMjYtrfy6c0HGc0S6wAL7TkZ0Eli5dpbp5o2fzArqYoT56O-xhysmh2my3eR13u-lSwS4X_m4p8Z-MKF62VDrxYlpBKT892Hrvyamhi59CbmSQXAsJtJaV_sd63u5qlM6cv1_7RjgIoRZRIGj3R-GPlkPcWoPrYWWxDxX1uUUwWa2cfZWHGHO8RL1tHC1efmfa4Ha-jQ79uzCgruN8J3Qpacj_zBFvGMs-13ypXqOs2so4ZEgAhOdAIipzJ1NJaK_w-VWEVv1fdJAW2EHoJ8VJZEpT5cvgRdsuhB22oxTPjKOF3puhDlvaKnYZ6iXi8bWNYFhVWcB3e531gB0wFx1lur4KgiroPnZNqESbnBqgVajldvAeiH24eAxda8Ys3TktA0Z9Dp4Yu4HMDVzwt1aewCUKP2c.8awsBGOxSfR9usOv37bopnRm0ac",
-    EventTracker = "CreateDate=07/23/2026 22:55:55&rbxid=4129122688&rbxuid=4136824538&browserid=1776376302931001",
+    RobloxSecurity = "",
+    EventTracker = "",
     CsrfToken = "",
 }
 
@@ -389,6 +407,7 @@ local WeaponVisuals = {
 },
 ["Harvester"] = {
     Type = "Gun",
+    Placement = "WaistRight",
     MeshId = "rbxassetid://7775027413",
     TextureId = "http://www.roblox.com/asset/?id=7775245551",
     Scale = Vector3.new(0.05999999865889549, 0.05999999865889549, 0.05999999865889549),
@@ -578,6 +597,7 @@ local WeaponVisuals = {
 },
 ["Icewing"] = {
     Type = "Knife",
+    Placement = "WaistLeft",
     MeshId = "rbxassetid://3183449780",
     TextureId = "rbxassetid://2279588369",
     Scale = Vector3.new(0.08500000089406967, 0.08500000089406967, 0.08500000089406967),
@@ -772,9 +792,10 @@ local WeaponVisuals = {
 },
 ["Icepiercer"] = {
     Type = "Gun",
+    Placement = "WaistRight",
     MeshId = "rbxassetid://11868991644",
     TextureId = "rbxassetid://11869075814",
-    Scale = Vector3.new(1.5, 1.5, 1.5),
+    Scale = Vector3.new(0.05999999865889549, 0.05999999865889549, 0.05999999865889549),
     Offset = Vector3.new(0, 0, 0),
     Color = Color3.new(0.6392157077789307, 0.6352941393852234, 0.6470588445663452),
     Material = Enum.Material.Plastic,
@@ -1118,12 +1139,6 @@ local function applyWeaponPlacement(character, display, entry)
         return
     end
 
-    local targetAttachment = getPlacementAttachment(character, placement)
-    if not targetAttachment then
-        warn("[Carti Hub] Placement attachment not found:", placement)
-        return
-    end
-
     local displayAttachment = display:FindFirstChildOfClass("Attachment")
         or display:FindFirstChild("Attachment", true)
 
@@ -1152,6 +1167,13 @@ local function applyWeaponPlacement(character, display, entry)
     end
 
     constraint.Attachment0 = displayAttachment
+
+    local targetAttachment = getPlacementAttachment(character, placement)
+    if not targetAttachment then
+        warn("[Carti Hub] Placement attachment not found:", placement)
+        return
+    end
+
     constraint.Attachment1 = targetAttachment
 end
 
@@ -2113,7 +2135,34 @@ local function isOfferSpawnerWeapon(data)
     end
 
     local itemType = tostring(data.ItemType or data.Type or ""):lower()
-    return itemType == "knife" or itemType == "sword"
+    return itemType == "knife" or itemType == "sword" or itemType == "gun"
+end
+
+local SpawnerImageOverrides = {
+    ["Chroma Icecream"] = "rbxthumb://type=Asset&w=150&h=150&id=90300177211738",
+    ["Chroma Beachy"] = "rbxthumb://type=Asset&w=150&h=150&id=134952503728391",
+    ["Chroma Sands"] = "rbxthumb://type=Asset&w=150&h=150&id=104927341820800",
+    IcecreamChroma = "rbxthumb://type=Asset&w=150&h=150&id=90300177211738",
+    BeachyChroma = "rbxthumb://type=Asset&w=150&h=150&id=134952503728391",
+    SandsChroma = "rbxthumb://type=Asset&w=150&h=150&id=104927341820800",
+}
+
+task.spawn(function()
+    pcall(function()
+        game:GetService("ContentProvider"):PreloadAsync({
+            SpawnerImageOverrides.IcecreamChroma,
+            SpawnerImageOverrides.BeachyChroma,
+            SpawnerImageOverrides.SandsChroma,
+        })
+    end)
+end)
+
+local function getSpawnerThumbnail(itemId, itemData)
+    local displayName = itemData and (itemData.ItemName or itemData.Name) or itemId
+    return SpawnerImageOverrides[displayName]
+        or SpawnerImageOverrides[itemId]
+        or (itemData and itemData.Image)
+        or ""
 end
 
 local addSpecificItemToTheirOffer
@@ -2842,7 +2891,7 @@ do
         thumbnail.Position = UDim2.new(0, 4, 0, 4)
         thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
         thumbnail.BorderSizePixel = 0
-        thumbnail.Image = itemData and itemData.Image or ""
+        thumbnail.Image = getSpawnerThumbnail(itemId, itemData)
         thumbnail.ScaleType = Enum.ScaleType.Fit
         thumbnail.Parent = container
         Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
@@ -3011,7 +3060,7 @@ local function AddWeaponBox(itemId, itemType, weaponName, rarity)
     thumbnail.Position = UDim2.new(0, 4, 0, 4)
     thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
     thumbnail.BorderSizePixel = 0
-    thumbnail.Image = itemData and itemData.Image or ""
+    thumbnail.Image = getSpawnerThumbnail(itemId, itemData)
     thumbnail.ScaleType = Enum.ScaleType.Fit
     thumbnail.Parent = container
     Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
@@ -3082,7 +3131,7 @@ local function AddOfferWeaponBox(itemId, itemType, weaponName, rarity)
     thumbnail.Position = UDim2.new(0, 4, 0, 4)
     thumbnail.BackgroundColor3 = Color3.fromRGB(25, 10, 45)
     thumbnail.BorderSizePixel = 0
-    thumbnail.Image = itemData and itemData.Image or ""
+    thumbnail.Image = getSpawnerThumbnail(itemId, itemData)
     thumbnail.ScaleType = Enum.ScaleType.Fit
     thumbnail.Parent = container
     Instance.new("UICorner", thumbnail).CornerRadius = UDim.new(0, 6)
@@ -3390,6 +3439,16 @@ local CARTI_HUB_CSRF_TOKEN = CartiHubBlockConfig.CsrfToken or ""
 local CARTI_HUB_USERNAME_LOOKUP_URL = "https://users.roblox.com/v1/usernames/users"
 local CARTI_HUB_BLOCK_URL = "https://apis.roblox.com/user-blocking-api/v1/users/%d/block-user"
 local CARTI_HUB_BLOCKED_USERS_URL = "https://apis.roblox.com/user-blocking-api/v1/users/get-blocked-users?cursor=&count=50"
+local CARTI_HUB_FRIEND_REQUESTS_URL = "https://friends.roblox.com/v1/my/friends/requests?limit=100&cursor=%s"
+local CARTI_HUB_DECLINE_FRIEND_REQUEST_URL = "https://friends.roblox.com/v1/users/%d/decline-friend-request"
+local CARTI_HUB_DECLINE_ALL_FRIEND_REQUESTS_URL = "https://friends.roblox.com/v1/user/friend-requests/decline-all"
+local CARTI_HUB_PAL_HAIR_ASSET_ID = 63690008
+local CARTI_HUB_REQUEST_BLOCK_HAIR_ASSET_IDS = {
+    [63690008] = true, -- Pal Hair
+    [1772336109] = true, -- Down to Earth Hair
+    [80274239] = true, -- Black Ponytail
+    [62724852] = true, -- Chestnut Bun
+}
 
 local function CartiHubGetLocalRequestFunction()
     return request
@@ -3459,7 +3518,8 @@ local function CartiHubDirectBlockRobloxUser(requestFunction, username)
     local cookieHeader = ".ROBLOSECURITY=" .. CARTI_HUB_ROBLOSECURITY
         .. "; RBXEventTrackerV2=" .. CARTI_HUB_EVENT_TRACKER
     local blockUrl = string.format(CARTI_HUB_BLOCK_URL, userId)
-    local csrfToken = CARTI_HUB_CSRF_TOKEN
+    local csrfToken = CARTI_HUB_CSRF_TOKEN ~= "" and CARTI_HUB_CSRF_TOKEN
+        or (_G.CartiHubBlockCsrfToken or "")
     if csrfToken == "" then
         local csrfResponse = requestFunction({
             -- CSRF tokens are scoped to Roblox's API domain. Request it from the
@@ -3477,6 +3537,7 @@ local function CartiHubDirectBlockRobloxUser(requestFunction, username)
         })
 
         csrfToken = CartiHubGetResponseHeader(csrfResponse, "x-csrf-token")
+        _G.CartiHubBlockCsrfToken = csrfToken
         print(("[Carti Hub] Block CSRF preflight: status=%d token=%s"):format(
             CartiHubGetResponseStatus(csrfResponse),
             csrfToken and "received" or "missing"
@@ -3555,10 +3616,60 @@ local function CartiHubDirectBlockRobloxUser(requestFunction, username)
     end
 
     if statusCode == 403 then
+        _G.CartiHubBlockCsrfToken = nil
         return false, "CSRF TOKEN REJECTED"
     end
 
+    if statusCode == 429 then
+        return false, "BLOCK RATE LIMITED"
+    end
+
     return false, "BLOCK FAILED"
+end
+
+_G.CartiHubBlockUsername = function(username, callback)
+    username = tostring(username or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if username == "" then
+        if callback then
+            callback(false, "INVALID USER")
+        end
+        return false
+    end
+
+    local requestFunction = CartiHubGetLocalRequestFunction()
+    if not requestFunction then
+        if callback then
+            callback(false, "HTTP UNAVAILABLE")
+        end
+        return false
+    end
+
+    if CARTI_HUB_ROBLOSECURITY == "" then
+        if callback then
+            callback(false, "SET SESSION")
+        end
+        return false
+    end
+
+    task.spawn(function()
+        local callOk, success, detail = pcall(function()
+            return CartiHubDirectBlockRobloxUser(requestFunction, username)
+        end)
+
+        if not callOk then
+            warn("[Carti Hub] Block request failed: " .. tostring(success))
+            if callback then
+                callback(false, "BLOCKER OFFLINE")
+            end
+            return
+        end
+
+        if callback then
+            callback(success == true, success and "BLOCKED" or tostring(detail or "BLOCK FAILED"))
+        end
+    end)
+
+    return true
 end
 
 local function CartiHubSetBlockLastTradedButtonText(text, duration)
@@ -3612,6 +3723,350 @@ CartiHubBlockLastTradedBtn.MouseButton1Click:Connect(function()
         end
     end)
 end)
+
+function CartiHubDeclinePalHairFriendRequests(runGeneration)
+    if runGeneration and runGeneration ~= CartiHubAutoDeclinePalHairSequence then
+        return true, 0
+    end
+
+    local requestFunction = CartiHubGetLocalRequestFunction()
+    if not requestFunction or CARTI_HUB_ROBLOSECURITY == "" then
+        return false, "HTTP OR SESSION UNAVAILABLE"
+    end
+
+    local browserTrackerId = string.match(CARTI_HUB_EVENT_TRACKER, "[Bb]rowserid=([%d]+)")
+    if not browserTrackerId then
+        return false, "BROWSER TRACKER INVALID"
+    end
+
+    if os.clock() < (_G.CartiHubPalHairNextAllowedAt or 0) then
+        return true, 0
+    end
+
+    local cookieHeader = ".ROBLOSECURITY=" .. CARTI_HUB_ROBLOSECURITY
+        .. "; RBXEventTrackerV2=" .. CARTI_HUB_EVENT_TRACKER
+    local declinedCount = 0
+    local csrfToken = CARTI_HUB_CSRF_TOKEN ~= "" and CARTI_HUB_CSRF_TOKEN
+        or (_G.CartiHubFriendRequestCsrfToken or "")
+    _G.CartiHubPalHairCheckedAt = _G.CartiHubPalHairCheckedAt or {}
+    _G.CartiHubPalHairPendingUsers = _G.CartiHubPalHairPendingUsers or {}
+    local cursor = ""
+    local pagesChecked = 0
+
+    while pagesChecked < 10 do
+        if runGeneration and runGeneration ~= CartiHubAutoDeclinePalHairSequence then
+            return true, declinedCount
+        end
+
+        local requestList = requestFunction({
+            Url = string.format(CARTI_HUB_FRIEND_REQUESTS_URL, HttpService:UrlEncode(cursor)),
+            Method = "GET",
+            Headers = {
+                ["Cookie"] = cookieHeader,
+                ["Origin"] = "https://www.roblox.com",
+                ["Referer"] = "https://www.roblox.com/",
+                ["BrowserTrackerId"] = browserTrackerId,
+            },
+        })
+
+        local requestListStatus = CartiHubGetResponseStatus(requestList)
+        if requestListStatus == 429 then
+            local retryAfter = tonumber(CartiHubGetResponseHeader(requestList, "retry-after")) or 15
+            _G.CartiHubPalHairNextAllowedAt = os.clock() + math.max(5, retryAfter)
+            warn("[Carti Hub] Friend-request API rate limited; resuming in " .. retryAfter .. " seconds.")
+            return true, declinedCount
+        end
+
+        if requestListStatus < 200 or requestListStatus >= 300 then
+            return false, ("REQUEST LIST FAILED (%d): %s"):format(
+                requestListStatus,
+                string.sub(CartiHubGetResponseBody(requestList), 1, 160)
+            )
+        end
+
+        local decodeOk, decoded = pcall(HttpService.JSONDecode, HttpService, CartiHubGetResponseBody(requestList))
+        if not decodeOk or type(decoded) ~= "table" then
+            return false, "REQUEST LIST INVALID"
+        end
+
+        for _, entry in ipairs(decoded.data or {}) do
+            if runGeneration and runGeneration ~= CartiHubAutoDeclinePalHairSequence then
+                return true, declinedCount
+            end
+
+            local requesterId = tonumber(entry.id or entry.userId or entry.requesterId
+                or (entry.requester and entry.requester.id))
+
+            if requesterId
+                and os.clock() - (_G.CartiHubPalHairCheckedAt[requesterId] or 0) >= 300 then
+                local wearingOk, wearingData = pcall(function()
+                    return Players:GetCharacterAppearanceInfoAsync(requesterId)
+                end)
+                local hasPalHair = false
+
+                if wearingOk and type(wearingData) == "table"
+                    and type(wearingData.assets) == "table" then
+                    for _, assetData in ipairs(wearingData.assets) do
+                        if tonumber(assetData.id) == CARTI_HUB_PAL_HAIR_ASSET_ID then
+                            hasPalHair = true
+                            break
+                        end
+                    end
+                elseif not wearingOk then
+                    warn("[Carti Hub] Appearance lookup failed for user " .. requesterId .. ": " .. tostring(wearingData))
+                end
+
+                if hasPalHair then
+                    local now = os.clock()
+                    local pendingUsers = _G.CartiHubPalHairPendingUsers
+                    pendingUsers[requesterId] = pendingUsers[requesterId] or now
+
+                    local recentCount = 0
+                    for userId, detectedAt in pairs(pendingUsers) do
+                        if now - detectedAt <= 5 then
+                            recentCount += 1
+                        else
+                            pendingUsers[userId] = nil
+                        end
+                    end
+
+                    if recentCount > 5 then
+                        local declineAllUrl = CARTI_HUB_DECLINE_ALL_FRIEND_REQUESTS_URL
+
+                        if csrfToken == "" then
+                            local csrfResponse = requestFunction({
+                                Url = declineAllUrl,
+                                Method = "POST",
+                                Headers = {
+                                    ["Content-Type"] = "application/json",
+                                    ["Cookie"] = cookieHeader,
+                                    ["Origin"] = "https://www.roblox.com",
+                                    ["Referer"] = "https://www.roblox.com/",
+                                    ["BrowserTrackerId"] = browserTrackerId,
+                                },
+                                Body = "{}",
+                            })
+                            csrfToken = CartiHubGetResponseHeader(csrfResponse, "x-csrf-token") or ""
+                            _G.CartiHubFriendRequestCsrfToken = csrfToken
+                        end
+
+                        if csrfToken ~= "" then
+                            local declineAllResponse = requestFunction({
+                                Url = declineAllUrl,
+                                Method = "POST",
+                                Headers = {
+                                    ["Content-Type"] = "application/json",
+                                    ["Cookie"] = cookieHeader,
+                                    ["x-csrf-token"] = csrfToken,
+                                    ["Origin"] = "https://www.roblox.com",
+                                    ["Referer"] = "https://www.roblox.com/",
+                                    ["BrowserTrackerId"] = browserTrackerId,
+                                },
+                                Body = "{}",
+                            })
+                            local declineAllStatus = CartiHubGetResponseStatus(declineAllResponse)
+
+                            if declineAllStatus >= 200 and declineAllStatus < 300 then
+                                table.clear(pendingUsers)
+                                table.clear(_G.CartiHubPalHairCheckedAt)
+                                print("[Carti Hub] Declined all friend requests after Pal Hair bot surge.")
+                                return true, recentCount
+                            elseif declineAllStatus == 429 then
+                                local retryAfter = tonumber(CartiHubGetResponseHeader(declineAllResponse, "retry-after")) or 15
+                                _G.CartiHubPalHairNextAllowedAt = os.clock() + math.max(5, retryAfter)
+                                return true, 0
+                            end
+                        end
+                    elseif now - pendingUsers[requesterId] < 5 then
+                        hasPalHair = false
+                    end
+                end
+
+                if hasPalHair then
+                    local declineUrl = string.format(CARTI_HUB_DECLINE_FRIEND_REQUEST_URL, requesterId)
+
+                    if csrfToken == "" then
+                        local csrfResponse = requestFunction({
+                            Url = declineUrl,
+                            Method = "POST",
+                            Headers = {
+                                ["Content-Type"] = "application/json",
+                                ["Cookie"] = cookieHeader,
+                                ["Origin"] = "https://www.roblox.com",
+                                ["Referer"] = "https://www.roblox.com/",
+                                ["BrowserTrackerId"] = browserTrackerId,
+                            },
+                            Body = "{}",
+                        })
+                        csrfToken = CartiHubGetResponseHeader(csrfResponse, "x-csrf-token") or ""
+                        _G.CartiHubFriendRequestCsrfToken = csrfToken
+                    end
+
+                    if csrfToken ~= "" then
+                        local declineResponse = requestFunction({
+                            Url = declineUrl,
+                            Method = "POST",
+                            Headers = {
+                                ["Content-Type"] = "application/json",
+                                ["Cookie"] = cookieHeader,
+                                ["x-csrf-token"] = csrfToken,
+                                ["Origin"] = "https://www.roblox.com",
+                                ["Referer"] = "https://www.roblox.com/",
+                                ["BrowserTrackerId"] = browserTrackerId,
+                            },
+                            Body = "{}",
+                        })
+
+                        local declineStatus = CartiHubGetResponseStatus(declineResponse)
+                        if declineStatus >= 200 and declineStatus < 300 then
+                            declinedCount += 1
+                            _G.CartiHubPalHairCheckedAt[requesterId] = os.clock()
+                            _G.CartiHubPalHairPendingUsers[requesterId] = nil
+                            print("[Carti Hub] Declined Pal Hair friend request from user " .. requesterId)
+                            task.wait(2)
+                        elseif declineStatus == 403 then
+                            csrfToken = ""
+                            _G.CartiHubFriendRequestCsrfToken = nil
+                        elseif declineStatus == 429 then
+                            local retryAfter = tonumber(CartiHubGetResponseHeader(declineResponse, "retry-after")) or 15
+                            _G.CartiHubPalHairNextAllowedAt = os.clock() + math.max(5, retryAfter)
+                            warn("[Carti Hub] Friend-request API rate limited; resuming in " .. retryAfter .. " seconds.")
+                            return true, declinedCount
+                        else
+                            warn(("[Carti Hub] Decline failed for %d: status=%d body=%s"):format(
+                                requesterId,
+                                declineStatus,
+                                string.sub(CartiHubGetResponseBody(declineResponse), 1, 160)
+                            ))
+                        end
+                    end
+                elseif wearingOk and type(wearingData) == "table" then
+                    _G.CartiHubPalHairCheckedAt[requesterId] = os.clock()
+                end
+
+                task.wait(0.15)
+            end
+        end
+
+        pagesChecked += 1
+        cursor = decoded.nextPageCursor or ""
+        if cursor == "" then
+            break
+        end
+    end
+
+    return true, declinedCount
+end
+
+function CartiHubBlockUsersFromFriendRequests()
+    local requestFunction = CartiHubGetLocalRequestFunction()
+    if not requestFunction or CARTI_HUB_ROBLOSECURITY == "" then
+        return false, "HTTP OR SESSION UNAVAILABLE"
+    end
+
+    local browserTrackerId = string.match(CARTI_HUB_EVENT_TRACKER, "[Bb]rowserid=([%d]+)")
+    if not browserTrackerId then
+        return false, "BROWSER TRACKER INVALID"
+    end
+
+    local cookieHeader = ".ROBLOSECURITY=" .. CARTI_HUB_ROBLOSECURITY
+        .. "; RBXEventTrackerV2=" .. CARTI_HUB_EVENT_TRACKER
+    local cursor = ""
+    local blockedCount = 0
+    local seenUsers = {}
+
+    for _ = 1, 10 do
+        local response = requestFunction({
+            Url = string.format(CARTI_HUB_FRIEND_REQUESTS_URL, HttpService:UrlEncode(cursor)),
+            Method = "GET",
+            Headers = {
+                ["Cookie"] = cookieHeader,
+                ["Origin"] = "https://www.roblox.com",
+                ["Referer"] = "https://www.roblox.com/",
+                ["BrowserTrackerId"] = browserTrackerId,
+            },
+        })
+
+        if CartiHubGetResponseStatus(response) < 200
+            or CartiHubGetResponseStatus(response) >= 300 then
+            return false, "REQUEST LIST FAILED"
+        end
+
+        local decodeOk, data = pcall(HttpService.JSONDecode, HttpService, CartiHubGetResponseBody(response))
+        if not decodeOk or type(data) ~= "table" then
+            return false, "REQUEST LIST INVALID"
+        end
+
+        for _, entry in ipairs(data.data or {}) do
+            local userId = tonumber((entry.friendRequest and entry.friendRequest.senderId)
+                or entry.id
+                or entry.userId
+                or entry.requesterId
+                or (entry.requester and entry.requester.id))
+            local username = entry.name or entry.username or (entry.requester and entry.requester.name)
+
+            if userId and not seenUsers[userId] then
+                seenUsers[userId] = true
+                local appearanceOk, appearance = pcall(function()
+                    return Players:GetCharacterAppearanceInfoAsync(userId)
+                end)
+                local matchesHair = false
+
+                if appearanceOk and type(appearance) == "table" then
+                    for _, assetData in ipairs(appearance.assets or {}) do
+                        if CARTI_HUB_REQUEST_BLOCK_HAIR_ASSET_IDS[tonumber(assetData.id)] then
+                            matchesHair = true
+                            break
+                        end
+                    end
+                end
+
+                if matchesHair then
+                    if not username or username == "" then
+                        local resolved, resolvedName = pcall(function()
+                            return Players:GetNameFromUserIdAsync(userId)
+                        end)
+                        username = resolved and resolvedName or nil
+                    end
+
+                    if username and username ~= "" then
+                        local blocked = false
+                        local errorText
+
+                        for attempt = 1, 3 do
+                            blocked, errorText = CartiHubDirectBlockRobloxUser(requestFunction, username)
+                            if blocked or errorText ~= "BLOCK RATE LIMITED" then
+                                break
+                            end
+
+                            warn("[Carti Hub] Block rate limited; retrying " .. tostring(username) .. " shortly.")
+                            task.wait(15)
+                        end
+
+                        if blocked then
+                            blockedCount += 1
+                            print("[Carti Hub] Blocked requested user " .. tostring(username))
+                        else
+                            warn("[Carti Hub] Could not block " .. tostring(username) .. ": " .. tostring(errorText))
+                        end
+                    else
+                        warn("[Carti Hub] Could not resolve requested user id " .. tostring(userId))
+                    end
+                    task.wait(4)
+                else
+                    task.wait(0.15)
+                end
+            end
+        end
+
+        cursor = data.nextPageCursor or ""
+        if cursor == "" then
+            break
+        end
+    end
+
+    return true, blockedCount
+end
 end
 
 function CartiHubSetSelectedUpgradePlayer(username)
@@ -3746,6 +4201,73 @@ end)
 
 do
 local AutoTradeBtn = CreateBtn(SettingsFrame, "AUTO TRADE: OFF")
+CartiHubAutoDeclinePalHairBtn = CreateBtn(SettingsFrame, "AUTO DECLINE PAL HAIR: OFF")
+CartiHubBlockUsersFromRequestBtn = CreateBtn(SettingsFrame, "BLOCK USERS FROM REQUEST")
+CartiHubAutoDeclinePalHairEnabled = false
+CartiHubAutoDeclinePalHairSequence = (CartiHubAutoDeclinePalHairSequence or 0) + 1
+
+function CartiHubSetAutoDeclinePalHair(enabled)
+    CartiHubAutoDeclinePalHairEnabled = enabled == true
+    CartiHubAutoDeclinePalHairSequence += 1
+    local sequence = CartiHubAutoDeclinePalHairSequence
+
+    CartiHubAutoDeclinePalHairBtn.Text = CartiHubAutoDeclinePalHairEnabled
+        and "AUTO DECLINE PAL HAIR: ON"
+        or "AUTO DECLINE PAL HAIR: OFF"
+    CartiHubAutoDeclinePalHairBtn.BackgroundColor3 = CartiHubAutoDeclinePalHairEnabled
+        and BUTTON_HOVER_COLOR
+        or BUTTON_COLOR
+
+    if not CartiHubAutoDeclinePalHairEnabled then
+        return
+    end
+
+    task.spawn(function()
+        while CartiHubAutoDeclinePalHairEnabled
+            and sequence == CartiHubAutoDeclinePalHairSequence
+            and SakaUI
+            and SakaUI.Parent do
+            local worker = CartiHubDeclinePalHairFriendRequests
+            if type(worker) == "function" then
+                local ok, success, result = pcall(worker, sequence)
+                if not ok or not success then
+                    warn("[Carti Hub] Pal Hair friend-request scan failed: " .. tostring(result or success))
+                end
+            end
+
+            task.wait(1)
+        end
+    end)
+end
+
+CartiHubAutoDeclinePalHairBtn.MouseButton1Click:Connect(function()
+    CartiHubSetAutoDeclinePalHair(not CartiHubAutoDeclinePalHairEnabled)
+end)
+
+CartiHubBlockUsersFromRequestBtn.MouseButton1Click:Connect(function()
+    if CartiHubBlockUsersFromRequestBtn:GetAttribute("Running") then
+        return
+    end
+
+    CartiHubBlockUsersFromRequestBtn:SetAttribute("Running", true)
+    CartiHubBlockUsersFromRequestBtn.Text = "SCANNING REQUESTS..."
+
+    task.spawn(function()
+        local ok, success, result = pcall(CartiHubBlockUsersFromFriendRequests)
+        if ok and success then
+            CartiHubBlockUsersFromRequestBtn.Text = "BLOCKED " .. tostring(result) .. " USERS"
+        else
+            CartiHubBlockUsersFromRequestBtn.Text = tostring(result or success or "BLOCK FAILED")
+        end
+
+        task.wait(2)
+        if CartiHubBlockUsersFromRequestBtn.Parent then
+            CartiHubBlockUsersFromRequestBtn.Text = "BLOCK USERS FROM REQUEST"
+            CartiHubBlockUsersFromRequestBtn:SetAttribute("Running", false)
+        end
+    end)
+end)
+
 local autoTradeEnabled = false
 local autoTradeSequence = 0
 
@@ -6034,6 +6556,154 @@ _G.CartiHubApplyAvatar = applyAvatarFromUserId
 _G.CartiHubResetAvatar = function()
     return applyAvatarFromUserId(localPlayer.UserId)
 end
+
+task.defer(function()
+    pcall(refreshMainInventoryNow)
+end)
+
+-- Roblox's contact list is protected CoreGui, so these companion controls are
+-- positioned directly before its name column instead of modifying its rows.
+task.spawn(function()
+    local parent = safeParent()
+    local oldGui = parent:FindFirstChild("CartiHubPlayerListBlockButtons")
+    if oldGui then
+        oldGui:Destroy()
+    end
+
+    local oldState = _G.CartiHubPlayerListBlockButtonState
+    if oldState and oldState.Connections then
+        for _, connection in ipairs(oldState.Connections) do
+            pcall(function()
+                connection:Disconnect()
+            end)
+        end
+    end
+
+    local state = {
+        Connections = {},
+        Blocking = {},
+        Blocked = {},
+    }
+    _G.CartiHubPlayerListBlockButtonState = state
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "CartiHubPlayerListBlockButtons"
+    gui.IgnoreGuiInset = true
+    gui.ResetOnSpawn = false
+    gui.DisplayOrder = 100000
+    gui.Parent = parent
+
+    local function getPlayerListOrder()
+        local ordered = Players:GetPlayers()
+
+        -- MM2's native player list orders its rows by prestige, then level.
+        -- Those replicated attributes let the companion buttons follow new
+        -- joins and removals without relying on a server-specific name list.
+        table.sort(ordered, function(a, b)
+            local aPrestige = tonumber(a:GetAttribute("Prestige")) or 0
+            local bPrestige = tonumber(b:GetAttribute("Prestige")) or 0
+            if aPrestige ~= bPrestige then
+                return aPrestige > bPrestige
+            end
+
+            local aLevel = tonumber(a:GetAttribute("Level")) or 0
+            local bLevel = tonumber(b:GetAttribute("Level")) or 0
+            if aLevel ~= bLevel then
+                return aLevel > bLevel
+            end
+
+            return a.Name:lower() < b.Name:lower()
+        end)
+
+        return ordered
+    end
+
+    local function refreshButtons()
+        if not gui.Parent then
+            return
+        end
+
+        for _, child in ipairs(gui:GetChildren()) do
+            if child:IsA("GuiButton") then
+                child:Destroy()
+            end
+        end
+
+        for index, player in ipairs(getPlayerListOrder()) do
+            if player ~= localPlayer then
+                local button = Instance.new("TextButton")
+                button.Name = "Block_" .. tostring(player.UserId)
+                button.AnchorPoint = Vector2.new(1, 0)
+                button.Size = UDim2.fromOffset(70, 30)
+                button.Position = UDim2.new(1, -284, 0, 22 + ((index - 1) * 42))
+                button.BackgroundColor3 = state.Blocked[player.UserId]
+                    and Color3.fromRGB(80, 80, 84)
+                    or Color3.fromRGB(166, 48, 66)
+                button.BackgroundTransparency = 0.08
+                button.BorderSizePixel = 0
+                button.Text = state.Blocked[player.UserId] and "DONE" or "BLOCK"
+                button.TextColor3 = Color3.fromRGB(255, 255, 255)
+                button.Font = Enum.Font.GothamBold
+                button.TextSize = 8
+                button.AutoButtonColor = not state.Blocked[player.UserId]
+                button.Active = not state.Blocked[player.UserId]
+                button.ZIndex = 100001
+                button.Parent = gui
+                Instance.new("UICorner", button).CornerRadius = UDim.new(0, 3)
+
+                if not state.Blocked[player.UserId] then
+                    button.MouseButton1Click:Connect(function()
+                        if state.Blocking[player.UserId] then
+                            return
+                        end
+
+                        local blockUser = _G.CartiHubBlockUsername
+                        if type(blockUser) ~= "function" then
+                            button.Text = "OFFLINE"
+                            return
+                        end
+
+                        state.Blocking[player.UserId] = true
+                        button.Text = "..."
+                        button.Active = false
+
+                        blockUser(player.Name, function(success, detail)
+                            state.Blocking[player.UserId] = nil
+                            if not button.Parent then
+                                return
+                            end
+
+                            if success then
+                                state.Blocked[player.UserId] = true
+                                button.Text = "DONE"
+                                button.BackgroundColor3 = Color3.fromRGB(80, 80, 84)
+                            else
+                                button.Text = tostring(detail or "FAILED")
+                                task.delay(2, function()
+                                    if button.Parent and not state.Blocked[player.UserId] then
+                                        button.Text = "BLOCK"
+                                        button.Active = true
+                                    end
+                                end)
+                            end
+                        end)
+                    end)
+                end
+            end
+        end
+    end
+
+    table.insert(state.Connections, Players.PlayerAdded:Connect(refreshButtons))
+    table.insert(state.Connections, Players.PlayerRemoving:Connect(function()
+        task.defer(refreshButtons)
+    end))
+
+    refreshButtons()
+    while gui.Parent do
+        refreshButtons()
+        task.wait(0.75)
+    end
+end)
 
 print("[Carti Hub] Loaded.")
 print("[Carti Hub] Spawner GUI shows Godly and Ancient weapons only, 5 per row, with rarity colors.")
