@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -6851,6 +6852,48 @@ task.spawn(function()
     }
 
     local CHROMA_ITEM_VALUES = {
+        -- Exact MM2 database ids for chromas whose display names omit "Chroma".
+        ["TravelerGunChroma"] = 220000,
+        ["TreeGun2023Chroma"] = 75000,
+        ["TreeKnife2023Chroma"] = 50000,
+        ["BaubleChroma"] = 34000,
+        ["VampireGunChroma"] = 29000,
+        ["ConstellationChroma"] = 27000,
+        ["UFOKnifeChroma"] = 24000,
+        ["SunsetGunChroma"] = 13250,
+        ["RaygunChroma"] = 12000,
+        ["SnowcannonChroma"] = 8500,
+        ["SunsetKnifeChroma"] = 8250,
+        ["BlizzardChroma"] = 8000,
+        ["SnowDaggerChroma"] = 4250,
+        ["SnowstormChroma"] = 4250,
+        ["HeartWandChroma"] = 4250,
+        ["WatergunChroma"] = 3400,
+        ["TreatChroma"] = 2800,
+        ["SweetChroma"] = 2300,
+        ["IcecreamChroma"] = 2000,
+        ["SandsChroma"] = 1800,
+        ["BeachyChroma"] = 1750,
+        ["BaubleKnifeChroma"] = 1800,
+        ["DarkbringerChroma"] = 65,
+        ["LightbringerChroma"] = 60,
+        ["LugerChroma"] = 50,
+        ["CandleflameChroma"] = 40,
+        ["LaserChroma"] = 40,
+        ["SwirlyGunChroma"] = 38,
+        ["ElderwoodKnifeChroma"] = 37,
+        ["DeathshardChroma"] = 35,
+        ["Gingermint_KChroma"] = 32,
+        ["FangChroma"] = 32,
+        ["GemstoneChroma"] = 32,
+        ["SharkChroma"] = 32,
+        ["SlasherChroma"] = 32,
+        ["HeatChroma"] = 28,
+        ["SeerChroma"] = 28,
+        ["GingerbladeChroma"] = 27,
+        ["TidesChroma"] = 27,
+        ["SawChroma"] = 23,
+        ["BonebladeChroma"] = 22,
         ["Chroma Traveler's Gun"] = 220000,
         ["C. Traveler's Gun"] = 220000,
         ["ChromaTravelerGun"] = 220000,
