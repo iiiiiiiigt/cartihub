@@ -1997,10 +1997,19 @@ local function isChromaWeapon(itemId, data)
         return false
     end
 
+    local chromaTexture = data.ChromaTexture
+    local chromaStaticLayer = data.ChromaStaticLayer
+    local hasChromaTexture = chromaTexture ~= nil
+        and chromaTexture ~= false
+        and tostring(chromaTexture) ~= ""
+    local hasChromaStaticLayer = chromaStaticLayer ~= nil
+        and chromaStaticLayer ~= false
+        and tostring(chromaStaticLayer) ~= ""
+
     if data.Chroma == true
         or data.IsChroma == true
-        or data.ChromaTexture ~= nil
-        or data.ChromaStaticLayer ~= nil then
+        or hasChromaTexture
+        or hasChromaStaticLayer then
         return true
     end
 
@@ -5405,6 +5414,48 @@ local function addTheirOfferToInventory(offerList)
     end
 end
 
+_G.CartiHubSeasonalOfferTagConnections = _G.CartiHubSeasonalOfferTagConnections or {}
+
+function CartiHubClearSeasonalOfferTagGuards(slot)
+    local tags = slot and slot:FindFirstChild("Tags", true)
+    if not tags then
+        return
+    end
+
+    for _, tagName in ipairs({ "Halloween", "Christmas" }) do
+        local tag = tags:FindFirstChild(tagName)
+        local connection = tag and _G.CartiHubSeasonalOfferTagConnections[tag]
+        if connection then
+            connection:Disconnect()
+            _G.CartiHubSeasonalOfferTagConnections[tag] = nil
+        end
+    end
+end
+
+function CartiHubHideSeasonalOfferTags(slot)
+    local tags = slot and slot:FindFirstChild("Tags", true)
+    if not tags then
+        return
+    end
+
+    for _, tagName in ipairs({ "Halloween", "Christmas" }) do
+        local tag = tags:FindFirstChild(tagName)
+        if tag and tag:IsA("GuiObject") then
+            local oldConnection = _G.CartiHubSeasonalOfferTagConnections[tag]
+            if oldConnection then
+                oldConnection:Disconnect()
+            end
+
+            tag.Visible = false
+            _G.CartiHubSeasonalOfferTagConnections[tag] = tag:GetPropertyChangedSignal("Visible"):Connect(function()
+                if tag.Parent and tag.Visible then
+                    tag.Visible = false
+                end
+            end)
+        end
+    end
+end
+
 local function drawOfferSlots(offerFrame, offerList)
     clearOfferSlots(offerFrame)
 
@@ -5415,7 +5466,11 @@ local function drawOfferSlots(offerFrame, offerList)
 
         local itemData = copyItemData(offer.ItemID, offer.ItemType, offer.Amount)
         if slot and itemData then
+            CartiHubClearSeasonalOfferTagGuards(slot)
             itemModule.DisplayItem(slot, itemData)
+            if offer.HideSeasonalTags then
+                CartiHubHideSeasonalOfferTags(slot)
+            end
             slot.Visible = true
         end
     end
@@ -6119,12 +6174,13 @@ local function getRandomGodlyWeapon()
     return candidates[math.random(1, #candidates)]
 end
 
-local function addItemToTheirOfferStack(itemId, itemType, amount)
+local function addItemToTheirOfferStack(itemId, itemType, amount, hideSeasonalTags)
     amount = tonumber(amount) or 1
 
     for _, offer in ipairs(theirOffer) do
         if offer.ItemID == itemId and offer.ItemType == itemType then
             offer.Amount = (tonumber(offer.Amount) or 1) + amount
+            offer.HideSeasonalTags = offer.HideSeasonalTags or hideSeasonalTags == true
             return true
         end
     end
@@ -6137,6 +6193,7 @@ local function addItemToTheirOfferStack(itemId, itemType, amount)
         ItemID = itemId,
         Amount = amount,
         ItemType = itemType,
+        HideSeasonalTags = hideSeasonalTags == true,
     })
 
     return true
@@ -6216,11 +6273,11 @@ local function addRandomWeaponAboveValue(minimumValue)
     end
 
     local item = candidates[math.random(1, #candidates)]
-    addSpecificItemToTheirOffer(item.ItemID, item.ItemType)
+    addSpecificItemToTheirOffer(item.ItemID, item.ItemType, true)
     return true
 end
 
-addSpecificItemToTheirOffer = function(itemId, itemType)
+addSpecificItemToTheirOffer = function(itemId, itemType, hideSeasonalTags)
     if not tradeModule.GUI.TradeGUI.Enabled then
         warn("[IncomingTradePopup] Open the placeholder trade before adding an offer-spawner item.")
         return
@@ -6237,7 +6294,7 @@ addSpecificItemToTheirOffer = function(itemId, itemType)
         return
     end
 
-    if not addItemToTheirOfferStack(itemId, itemType, 1) then
+    if not addItemToTheirOfferStack(itemId, itemType, 1, hideSeasonalTags) then
         warn("[IncomingTradePopup] Their offer is full.")
         return
     end
@@ -6934,11 +6991,20 @@ task.spawn(function()
     end
 
     local function isChromaValueItem(itemId, data)
+        local chromaTexture = data and data.ChromaTexture
+        local chromaStaticLayer = data and data.ChromaStaticLayer
+        local hasChromaTexture = chromaTexture ~= nil
+            and chromaTexture ~= false
+            and tostring(chromaTexture) ~= ""
+        local hasChromaStaticLayer = chromaStaticLayer ~= nil
+            and chromaStaticLayer ~= false
+            and tostring(chromaStaticLayer) ~= ""
+
         if type(data) == "table" and (
             data.Chroma == true
             or data.IsChroma == true
-            or data.ChromaTexture ~= nil
-            or data.ChromaStaticLayer ~= nil
+            or hasChromaTexture
+            or hasChromaStaticLayer
         ) then
             return true
         end
