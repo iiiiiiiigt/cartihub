@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -34,8 +33,8 @@ end
 
 local currentWeaponAmount = 1
 local MAX_WEAPON_AMOUNT = 113
-local BUTTON_COLOR = Color3.fromRGB(200, 80, 255)
-local BUTTON_HOVER_COLOR = Color3.fromRGB(220, 100, 255)
+local BUTTON_COLOR = Color3.fromRGB(31, 11, 52)
+local BUTTON_HOVER_COLOR = Color3.fromRGB(59, 25, 91)
 local SakaUI
 
 -- Block credentials are entered at runtime in the Block tab and are not stored in this file.`r`n
@@ -1737,7 +1736,6 @@ local function applyWeaponVisual(itemId)
 
     lastAppliedWeaponVisuals[refName] = visualKey
     lastAppliedWeaponDisplays[refName] = display
-    print(("[Carti Hub] Applied visual for %s to %s"):format(tostring(itemId), refName))
     return true
 end
 
@@ -1790,21 +1788,52 @@ local function findWeaponInDatabase(weaponName)
         return nil
     end
 
-    local searchName = tostring(weaponName):lower()
+    local searchName = tostring(weaponName):lower():gsub("[^%w]", "")
 
     local function search(container, itemType)
+        local bestItemId, bestDisplayName, bestScore = nil, nil, -1
+
         for itemId, data in pairs(container or {}) do
             if type(data) == "table" then
                 local displayName = data.ItemName or data.Name or itemId
-                local idText = tostring(itemId)
+                local idText = tostring(itemId):lower():gsub("[^%w]", "")
+                local nameText = tostring(displayName):lower():gsub("[^%w]", "")
+                local score = -1
 
-                if tostring(displayName):lower() == searchName
-                    or tostring(displayName):lower():find(searchName, 1, true)
-                    or idText:lower() == searchName
-                    or idText:lower():find(searchName, 1, true) then
-                    return itemId, itemType, displayName
+                if idText == searchName then
+                    score = 100
+                elseif nameText == searchName then
+                    score = 90
+                elseif idText:find(searchName, 1, true) or nameText:find(searchName, 1, true) then
+                    score = 10
+                end
+
+                -- Prefer the actual Godly/Ancient item when cosmetic variants share a name.
+                if score >= 0 then
+                    if data.Rarity == "Ancient" then
+                        score += 8
+                    elseif data.Rarity == "Godly" then
+                        score += 6
+                    elseif data.Rarity == "Unique" then
+                        score -= 6
+                    end
+
+                    if idText:find("silver", 1, true)
+                        or idText:find("gold", 1, true)
+                        or idText:find("bronze", 1, true)
+                        or idText:find("purple", 1, true) then
+                        score -= 12
+                    end
+
+                    if score > bestScore then
+                        bestItemId, bestDisplayName, bestScore = itemId, displayName, score
+                    end
                 end
             end
+        end
+
+        if bestItemId then
+            return bestItemId, itemType, bestDisplayName
         end
     end
 
@@ -1842,7 +1871,6 @@ local function spawnWeapon(weaponNameOrId, amount)
         end)
     end
 
-    print(("[Carti Hub] Spawned %dx %s (%s/%s)"):format(amount, displayName or weaponNameOrId, itemType, itemId))
     return true
 end
 
@@ -1873,7 +1901,6 @@ local function spawnWeaponById(itemId, itemType, amount)
     end
 
     local displayName = itemData.ItemName or itemData.Name or itemId
-    print(("[Carti Hub] Spawned %dx %s (%s/%s)"):format(amount, displayName, itemType, itemId))
     return true
 end
 
@@ -1898,7 +1925,6 @@ local function spawnWeaponByIdNoPopup(itemId, itemType, amount)
     refreshMainInventoryNow()
 
     local displayName = itemData.ItemName or itemData.Name or itemId
-    print(("[Carti Hub] Spawned %dx %s without popup (%s/%s)"):format(amount, displayName, itemType, itemId))
     return true
 end
 
@@ -1958,7 +1984,6 @@ local function spawnAllGodlyWeapons(amount)
     collect(sync.Item, "Item")
     refreshMainInventoryNow()
 
-    print(("[Carti Hub] Spawned %dx of %d godly weapons"):format(amount, spawnedCount))
     return spawnedCount
 end
 
@@ -1989,7 +2014,6 @@ local function spawnAllAncientWeapons(amount)
     collect(sync.Item, "Item")
     refreshMainInventoryNow()
 
-    print(("[Carti Hub] Spawned %dx of %d ancient weapons"):format(amount, spawnedCount))
     return spawnedCount
 end
 
@@ -2047,7 +2071,6 @@ local function spawnAllChromaWeapons(amount)
     collect(sync.Item, "Item")
     refreshMainInventoryNow()
 
-    print(("[Carti Hub] Spawned %dx of %d chroma weapons"):format(amount, spawnedCount))
     return spawnedCount
 end
 
@@ -2072,7 +2095,7 @@ local function getRarityColor(rarity)
         end
     end
 
-    return Color3.fromRGB(200, 100, 255)
+    return Color3.fromRGB(83, 220, 255)
 end
 
 local function isSpawnerRarity(data)
@@ -2176,104 +2199,123 @@ if oldUi then
     oldUi:Destroy()
 end
 
+do
+    local oldNebulaUi = safeParent():FindFirstChild("CartiHubNebula")
+    if oldNebulaUi then
+        oldNebulaUi:Destroy()
+    end
+end
+
 SakaUI = Instance.new("ScreenGui")
 SakaUI.Name = "SakaModMenu"
 SakaUI.ResetOnSpawn = false
+SakaUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SakaUI.Parent = safeParent()
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 300, 0, 600)
-MainFrame.Position = UDim2.new(0.8, -150, 0.5, -300)
-MainFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+MainFrame.Size = UDim2.new(0, 448, 0, 540)
+MainFrame.Position = UDim2.new(0.78, -224, 0.5, -270)
+MainFrame.BackgroundColor3 = Color3.fromRGB(13, 4, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = SakaUI
 
 local Gradient = Instance.new("UIGradient")
-Gradient.Rotation = 45
+Gradient.Rotation = 25
 Gradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(130, 50, 210)),
-    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(180, 70, 230)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 100, 255)),
-    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(160, 60, 220)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 35, 180)),
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(4, 17, 27)),
+    ColorSequenceKeypoint.new(0.24, Color3.fromRGB(8, 61, 70)),
+    ColorSequenceKeypoint.new(0.52, Color3.fromRGB(9, 37, 78)),
+    ColorSequenceKeypoint.new(0.77, Color3.fromRGB(58, 15, 78)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 8, 38)),
 })
 Gradient.Parent = MainFrame
+Gradient.Enabled = false
 
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+MainFrame.ClipsDescendants = true
 
 local BorderStroke = Instance.new("UIStroke")
-BorderStroke.Color = Color3.fromRGB(220, 120, 255)
-BorderStroke.Thickness = 2
-BorderStroke.Transparency = 0.15
+BorderStroke.Color = Color3.fromRGB(255, 255, 255)
+BorderStroke.Thickness = 1
+BorderStroke.Transparency = 0.9
 BorderStroke.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -40, 0, 50)
-Title.Position = UDim2.new(0, 15, 0, 0)
+Title.Size = UDim2.new(1, -154, 0, 34)
+Title.Position = UDim2.new(0, 112, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "Carti Hub"
-Title.TextColor3 = Color3.fromRGB(255, 235, 255)
+Title.Text = "t.me/cartiscripts"
+Title.TextColor3 = Color3.fromRGB(231, 222, 242)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 22
+Title.TextSize = 12
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 35, 0, 35)
-CloseBtn.Position = UDim2.new(1, -45, 0, 8)
+CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position = UDim2.new(1, -34, 0, 3)
 CloseBtn.BackgroundTransparency = 1
 CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+CloseBtn.TextColor3 = Color3.fromRGB(255, 128, 207)
 CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 22
+CloseBtn.TextSize = 16
 CloseBtn.Parent = MainFrame
 CloseBtn.MouseButton1Click:Connect(function()
     SakaUI:Destroy()
 end)
 
+local TopbarDivider = Instance.new("Frame")
+TopbarDivider.Size = UDim2.new(1, 0, 0, 1)
+TopbarDivider.Position = UDim2.new(0, 0, 0, 34)
+TopbarDivider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TopbarDivider.BackgroundTransparency = 0.94
+TopbarDivider.BorderSizePixel = 0
+TopbarDivider.Parent = MainFrame
+
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, -20, 0, 74)
-TabContainer.Position = UDim2.new(0, 10, 0, 55)
-TabContainer.BackgroundTransparency = 1
+TabContainer.Size = UDim2.new(0, 100, 1, -128)
+TabContainer.Position = UDim2.new(0, 8, 0, 76)
+TabContainer.BackgroundColor3 = Color3.fromRGB(16, 5, 30)
+TabContainer.BackgroundTransparency = 0
 TabContainer.Parent = MainFrame
 
 local TabLayout = Instance.new("UIGridLayout")
-TabLayout.CellSize = UDim2.new(1 / 3, -4, 0, 34)
-TabLayout.CellPadding = UDim2.new(0, 5, 0, 5)
-TabLayout.FillDirectionMaxCells = 3
+TabLayout.CellSize = UDim2.new(1, -8, 0, 38)
+TabLayout.CellPadding = UDim2.new(0, 0, 0, 4)
+TabLayout.FillDirectionMaxCells = 1
 TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
 TabLayout.Parent = TabContainer
 
 local function CreateTabBtn(text, order)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 0, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    btn.BackgroundColor3 = Color3.fromRGB(19, 7, 33)
     btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 240, 255)
+    btn.TextColor3 = Color3.fromRGB(177, 157, 197)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 12
+    btn.TextSize = 10
     btn.LayoutOrder = order
     btn.Parent = TabContainer
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
     return btn
 end
 
 local function CreateTabFrame()
     local frame = Instance.new("ScrollingFrame")
-    frame.Size = UDim2.new(1, -20, 1, -145)
-    frame.Position = UDim2.new(0, 10, 0, 140)
+    frame.Size = UDim2.new(1, -128, 1, -62)
+    frame.Position = UDim2.new(0, 116, 0, 50)
     frame.BackgroundTransparency = 1
     frame.BorderSizePixel = 0
-    frame.ScrollBarThickness = 4
+    frame.ScrollBarThickness = 3
     frame.CanvasSize = UDim2.new(0, 0, 1.45, 0)
     frame.Visible = false
     frame.Parent = MainFrame
 
     local list = Instance.new("UIListLayout")
     list.SortOrder = Enum.SortOrder.LayoutOrder
-    list.Padding = UDim.new(0, 10)
+    list.Padding = UDim.new(0, 6)
     list.Parent = frame
 
     return frame
@@ -2281,21 +2323,21 @@ end
 
 local function CreateBox(parent, placeholder)
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, 0, 0, 38)
-    box.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    box.Size = UDim2.new(1, 0, 0, 34)
+    box.BackgroundColor3 = Color3.fromRGB(20, 8, 34)
     box.PlaceholderText = placeholder
-    box.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    box.PlaceholderColor3 = Color3.fromRGB(132, 112, 151)
     box.Text = ""
-    box.TextColor3 = Color3.fromRGB(255, 245, 255)
+    box.TextColor3 = Color3.fromRGB(242, 231, 255)
     box.Font = Enum.Font.Gotham
     box.TextSize = 13
     box.Parent = parent
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(200, 100, 255)
+    stroke.Color = Color3.fromRGB(186, 163, 211)
     stroke.Thickness = 1
-    stroke.Transparency = 0.2
+    stroke.Transparency = 0.82
     stroke.Parent = box
 
     return box
@@ -2303,14 +2345,14 @@ end
 
 local function CreateBtn(parent, text)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 42)
+    btn.Size = UDim2.new(1, 0, 0, 38)
     btn.BackgroundColor3 = BUTTON_COLOR
     btn.Text = text
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 13
+    btn.TextSize = 12
     btn.Parent = parent
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
 
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.2), { BackgroundColor3 = BUTTON_HOVER_COLOR }):Play()
@@ -2341,7 +2383,7 @@ local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
     local bg = Instance.new("Frame")
     bg.Size = UDim2.new(1, -10, 0, 10)
     bg.Position = UDim2.new(0, 5, 0, 28)
-    bg.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+    bg.BackgroundColor3 = Color3.fromRGB(13, 22, 46)
     bg.Parent = container
     Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
 
@@ -2354,9 +2396,9 @@ local function CreateSlider(parent, text, min, max, defaultVal, step, callback)
     local knob = Instance.new("TextButton")
     knob.Size = UDim2.new(0, 34, 0, 18)
     knob.Position = UDim2.new(1, -17, 0.5, -9)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 235, 255)
+    knob.BackgroundColor3 = Color3.fromRGB(210, 245, 255)
     knob.Text = tostring(defaultVal)
-    knob.TextColor3 = Color3.fromRGB(70, 30, 120)
+    knob.TextColor3 = Color3.fromRGB(15, 25, 52)
     knob.Font = Enum.Font.GothamBold
     knob.TextSize = 10
     knob.Parent = fill
@@ -2407,6 +2449,166 @@ local KeybindsFrame = CreateTabFrame()
 SpawnerFrame.Visible = true
 SpawnerTabBtn.BackgroundColor3 = BUTTON_HOVER_COLOR
 
+task.spawn(function()
+    local wrapper = Instance.new("CanvasGroup")
+    wrapper.Name = "CartiHubNebulaWrapper"
+    wrapper.Size = UDim2.fromScale(1, 1)
+    wrapper.BackgroundColor3 = Color3.fromRGB(13, 4, 24)
+    wrapper.BorderSizePixel = 0
+    wrapper.ZIndex = 1
+    wrapper.Parent = MainFrame
+    Instance.new("UICorner", wrapper).CornerRadius = UDim.new(0, 8)
+
+    local topbar = Instance.new("Frame")
+    topbar.Name = "NebulaTopbar"
+    topbar.Size = UDim2.new(1, 0, 0, 34)
+    topbar.BackgroundColor3 = Color3.fromRGB(16, 5, 30)
+    topbar.BorderSizePixel = 0
+    topbar.ZIndex = 1
+    topbar.Parent = wrapper
+    Instance.new("UICorner", topbar).CornerRadius = UDim.new(0, 8)
+
+    local topbarFill = Instance.new("Frame")
+    topbarFill.Size = UDim2.new(1, 0, 0.5, 0)
+    topbarFill.Position = UDim2.new(0, 0, 0.5, 0)
+    topbarFill.BackgroundColor3 = Color3.fromRGB(16, 5, 30)
+    topbarFill.BorderSizePixel = 0
+    topbarFill.ZIndex = 1
+    topbarFill.Parent = topbar
+
+    local rail = Instance.new("Frame")
+    rail.Name = "NebulaRibbon"
+    rail.Size = UDim2.new(0, 108, 1, -42)
+    rail.Position = UDim2.new(0, 4, 0, 38)
+    rail.BackgroundColor3 = Color3.fromRGB(16, 5, 30)
+    rail.BorderSizePixel = 0
+    rail.ZIndex = 1
+    rail.Parent = wrapper
+    Instance.new("UICorner", rail).CornerRadius = UDim.new(0, 6)
+
+    local content = Instance.new("Frame")
+    content.Name = "NebulaPageCanvas"
+    content.Size = UDim2.new(1, -122, 1, -46)
+    content.Position = UDim2.new(0, 116, 0, 40)
+    content.BackgroundColor3 = Color3.fromRGB(17, 6, 29)
+    content.BorderSizePixel = 0
+    content.ZIndex = 1
+    content.Parent = wrapper
+    Instance.new("UICorner", content).CornerRadius = UDim.new(0, 6)
+
+    local sectionLine = Instance.new("Frame")
+    sectionLine.Size = UDim2.new(1, -16, 0, 1)
+    sectionLine.Position = UDim2.new(0, 8, 0, 32)
+    sectionLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    sectionLine.BackgroundTransparency = 0.94
+    sectionLine.BorderSizePixel = 0
+    sectionLine.ZIndex = 1
+    sectionLine.Parent = rail
+
+    local railTitle = Instance.new("TextLabel")
+    railTitle.Size = UDim2.new(1, -16, 0, 20)
+    railTitle.Position = UDim2.new(0, 8, 0, 7)
+    railTitle.BackgroundTransparency = 1
+    railTitle.Text = "CONTROL PANEL"
+    railTitle.TextColor3 = Color3.fromRGB(121, 102, 140)
+    railTitle.Font = Enum.Font.GothamBold
+    railTitle.TextSize = 8
+    railTitle.TextXAlignment = Enum.TextXAlignment.Left
+    railTitle.ZIndex = 2
+    railTitle.Parent = rail
+
+    local pageCaption = Instance.new("TextLabel")
+    pageCaption.Size = UDim2.new(1, -20, 0, 20)
+    pageCaption.Position = UDim2.new(0, 126, 0, 41)
+    pageCaption.BackgroundTransparency = 1
+    pageCaption.Text = "MM2 CLIENT CONTROLS"
+    pageCaption.TextColor3 = Color3.fromRGB(132, 112, 151)
+    pageCaption.Font = Enum.Font.GothamBold
+    pageCaption.TextSize = 8
+    pageCaption.TextXAlignment = Enum.TextXAlignment.Left
+    pageCaption.ZIndex = 2
+    pageCaption.Parent = MainFrame
+
+    local profile = Instance.new("Frame")
+    profile.Name = "NebulaProfile"
+    profile.Size = UDim2.new(0, 92, 0, 42)
+    profile.Position = UDim2.new(0, 12, 1, -48)
+    profile.BackgroundColor3 = Color3.fromRGB(22, 8, 39)
+    profile.BorderSizePixel = 0
+    profile.ZIndex = 2
+    profile.Parent = MainFrame
+    Instance.new("UICorner", profile).CornerRadius = UDim.new(0, 5)
+
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 24, 0, 24)
+    avatar.Position = UDim2.new(0, 7, 0.5, -12)
+    avatar.BackgroundColor3 = Color3.fromRGB(41, 20, 61)
+    avatar.BorderSizePixel = 0
+    avatar.Image = ("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150"):format(localPlayer.UserId)
+    avatar.ZIndex = 3
+    avatar.Parent = profile
+    Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
+
+    local username = Instance.new("TextLabel")
+    username.Size = UDim2.new(1, -40, 0, 16)
+    username.Position = UDim2.new(0, 36, 0, 6)
+    username.BackgroundTransparency = 1
+    username.Text = localPlayer.Name
+    username.TextColor3 = Color3.fromRGB(225, 215, 238)
+    username.Font = Enum.Font.GothamBold
+    username.TextSize = 8
+    username.TextTruncate = Enum.TextTruncate.AtEnd
+    username.TextXAlignment = Enum.TextXAlignment.Left
+    username.ZIndex = 3
+    username.Parent = profile
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -40, 0, 13)
+    status.Position = UDim2.new(0, 36, 0, 21)
+    status.BackgroundTransparency = 1
+    status.Text = "SESSION ACTIVE"
+    status.TextColor3 = Color3.fromRGB(149, 117, 178)
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 7
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.ZIndex = 3
+    status.Parent = profile
+
+    for _, tab in ipairs({ SpawnerTabBtn, TradeTabBtn, UpgradingTabBtn, BlockTabBtn, SettingsTabBtn, KeybindsTabBtn }) do
+        tab.Position = UDim2.new(0, 4, 0, 0)
+        tab.Size = UDim2.new(1, -8, 0, 38)
+        tab.TextXAlignment = Enum.TextXAlignment.Left
+        tab.TextColor3 = Color3.fromRGB(182, 160, 203)
+        tab.ZIndex = 3
+
+        local padding = Instance.new("UIPadding")
+        padding.PaddingLeft = UDim.new(0, 12)
+        padding.Parent = tab
+
+        local accent = Instance.new("Frame")
+        accent.Name = "NebulaActiveAccent"
+        accent.Size = UDim2.new(0, 2, 0, 18)
+        accent.Position = UDim2.new(0, 0, 0.5, -9)
+        accent.BackgroundColor3 = Color3.fromRGB(185, 118, 255)
+        accent.BorderSizePixel = 0
+        accent.Visible = tab == SpawnerTabBtn
+        accent.ZIndex = 4
+        accent.Parent = tab
+    end
+
+    for _, root in ipairs({ Title, CloseBtn, TopbarDivider, TabContainer, SpawnerFrame, TradeFrame, UpgradingFrame, BlockFrame, SettingsFrame, KeybindsFrame }) do
+        if root:IsA("GuiObject") then
+            root.ZIndex = math.max(root.ZIndex, 3)
+        end
+
+        for _, descendant in ipairs(root:GetDescendants()) do
+            if descendant:IsA("GuiObject") then
+                descendant.ZIndex = math.max(descendant.ZIndex, 3)
+            end
+        end
+    end
+end)
+
 CartiHubBlockSessionBox = CreateBox(BlockFrame, "RBXSECURITY session")
 CartiHubBlockTrackerBox = CreateBox(BlockFrame, "RBXEventTrackerV2 value")
 _G.CartiHubGetBlockCredentials = function()
@@ -2430,28 +2632,28 @@ CartiHubPlayerListBlockToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 local SPAWNER_COLS = 5
-local SPAWNER_BOX_SIZE = 94
-local SPAWNER_PADDING = 6
-local SPAWNER_NAME_HEIGHT = 24
-local SPAWNER_RARITY_HEIGHT = 20
+local SPAWNER_BOX_SIZE = 78
+local SPAWNER_PADDING = 5
+local SPAWNER_NAME_HEIGHT = 21
+local SPAWNER_RARITY_HEIGHT = 18
 local SPAWNER_SLIDER_HEIGHT = 54
 local spawnerWidth = (SPAWNER_BOX_SIZE + SPAWNER_PADDING) * SPAWNER_COLS + SPAWNER_PADDING + 20
 
 local SpawnerGuiFrame = Instance.new("Frame")
 SpawnerGuiFrame.Name = "WeaponSpawnerGUI"
-SpawnerGuiFrame.Size = UDim2.new(0, spawnerWidth, 0, 500)
-SpawnerGuiFrame.Position = UDim2.new(0.5, -(spawnerWidth / 2), 0.5, -250)
-SpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+SpawnerGuiFrame.Size = UDim2.new(0, spawnerWidth, 0, 470)
+SpawnerGuiFrame.Position = UDim2.new(0.5, -(spawnerWidth / 2), 0.5, -235)
+SpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(9, 14, 31)
 SpawnerGuiFrame.BorderSizePixel = 0
 SpawnerGuiFrame.Active = true
 SpawnerGuiFrame.Draggable = true
 SpawnerGuiFrame.Visible = false
 SpawnerGuiFrame.Parent = SakaUI
-Instance.new("UICorner", SpawnerGuiFrame).CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", SpawnerGuiFrame).CornerRadius = UDim.new(0, 10)
 
 local PopupStroke = Instance.new("UIStroke")
-PopupStroke.Color = Color3.fromRGB(220, 120, 255)
-PopupStroke.Thickness = 2
+PopupStroke.Color = Color3.fromRGB(83, 220, 255)
+PopupStroke.Thickness = 1
 PopupStroke.Transparency = 0.15
 PopupStroke.Parent = SpawnerGuiFrame
 
@@ -2460,7 +2662,7 @@ PopupTitle.Size = UDim2.new(1, -40, 0, 35)
 PopupTitle.Position = UDim2.new(0, 15, 0, 5)
 PopupTitle.BackgroundTransparency = 1
 PopupTitle.Text = "Weapon Spawner"
-PopupTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+PopupTitle.TextColor3 = Color3.fromRGB(210, 245, 255)
 PopupTitle.Font = Enum.Font.GothamBold
 PopupTitle.TextSize = 18
 PopupTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -2471,7 +2673,7 @@ PopupCloseBtn.Size = UDim2.new(0, 28, 0, 28)
 PopupCloseBtn.Position = UDim2.new(1, -38, 0, 6)
 PopupCloseBtn.BackgroundTransparency = 1
 PopupCloseBtn.Text = "X"
-PopupCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+PopupCloseBtn.TextColor3 = Color3.fromRGB(255, 128, 207)
 PopupCloseBtn.Font = Enum.Font.GothamBold
 PopupCloseBtn.TextSize = 18
 PopupCloseBtn.Parent = SpawnerGuiFrame
@@ -2482,12 +2684,12 @@ end)
 local WeaponSearchBox = Instance.new("TextBox")
 WeaponSearchBox.Size = UDim2.new(1, -16, 0, 30)
 WeaponSearchBox.Position = UDim2.new(0, 8, 0, 42)
-WeaponSearchBox.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+WeaponSearchBox.BackgroundColor3 = Color3.fromRGB(13, 22, 46)
 WeaponSearchBox.BorderSizePixel = 0
 WeaponSearchBox.PlaceholderText = "Search weapons..."
-WeaponSearchBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+WeaponSearchBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
 WeaponSearchBox.Text = ""
-WeaponSearchBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+WeaponSearchBox.TextColor3 = Color3.fromRGB(220, 240, 255)
 WeaponSearchBox.Font = Enum.Font.Gotham
 WeaponSearchBox.TextSize = 13
 WeaponSearchBox.ClearTextOnFocus = false
@@ -2501,7 +2703,7 @@ WeaponScrollFrame.BackgroundTransparency = 1
 WeaponScrollFrame.BorderSizePixel = 0
 WeaponScrollFrame.ScrollBarThickness = 4
 WeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-WeaponScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+WeaponScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(83, 220, 255)
 WeaponScrollFrame.Parent = SpawnerGuiFrame
 
 local WeaponGrid = Instance.new("UIGridLayout")
@@ -2519,7 +2721,7 @@ end)
 local PopupSliderFrame = Instance.new("Frame")
 PopupSliderFrame.Size = UDim2.new(1, -16, 0, SPAWNER_SLIDER_HEIGHT)
 PopupSliderFrame.Position = UDim2.new(0, 8, 1, -(SPAWNER_SLIDER_HEIGHT + 6))
-PopupSliderFrame.BackgroundColor3 = Color3.fromRGB(55, 22, 95)
+PopupSliderFrame.BackgroundColor3 = Color3.fromRGB(12, 21, 45)
 PopupSliderFrame.BorderSizePixel = 0
 PopupSliderFrame.Parent = SpawnerGuiFrame
 Instance.new("UICorner", PopupSliderFrame).CornerRadius = UDim.new(0, 10)
@@ -2529,7 +2731,7 @@ PopupAmountLabel.Size = UDim2.new(1, -16, 0, 20)
 PopupAmountLabel.Position = UDim2.new(0, 8, 0, 4)
 PopupAmountLabel.BackgroundTransparency = 1
 PopupAmountLabel.Text = "Spawn Amount: " .. currentWeaponAmount
-PopupAmountLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+PopupAmountLabel.TextColor3 = Color3.fromRGB(210, 245, 255)
 PopupAmountLabel.Font = Enum.Font.GothamBold
 PopupAmountLabel.TextSize = 13
 PopupAmountLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -2553,9 +2755,9 @@ Instance.new("UICorner", PopupSliderFill).CornerRadius = UDim.new(1, 0)
 local PopupSliderKnob = Instance.new("TextButton")
 PopupSliderKnob.Size = UDim2.new(0, 34, 0, 18)
 PopupSliderKnob.Position = UDim2.new(0, -17, 0.5, -9)
-PopupSliderKnob.BackgroundColor3 = Color3.fromRGB(255, 235, 255)
+PopupSliderKnob.BackgroundColor3 = Color3.fromRGB(210, 245, 255)
 PopupSliderKnob.Text = tostring(currentWeaponAmount)
-PopupSliderKnob.TextColor3 = Color3.fromRGB(70, 30, 120)
+PopupSliderKnob.TextColor3 = Color3.fromRGB(15, 25, 52)
 PopupSliderKnob.Font = Enum.Font.GothamBold
 PopupSliderKnob.TextSize = 10
 PopupSliderKnob.Parent = PopupSliderFill
@@ -2621,19 +2823,19 @@ local offerSpawnerWidth = (SPAWNER_BOX_SIZE + SPAWNER_PADDING) * OFFER_SPAWNER_C
 
 local OfferSpawnerGuiFrame = Instance.new("Frame")
 OfferSpawnerGuiFrame.Name = "OfferSpawnerGUI"
-OfferSpawnerGuiFrame.Size = UDim2.new(0, offerSpawnerWidth, 0, 500)
-OfferSpawnerGuiFrame.Position = UDim2.new(0.5, -(offerSpawnerWidth / 2), 0.5, -250)
-OfferSpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+OfferSpawnerGuiFrame.Size = UDim2.new(0, offerSpawnerWidth, 0, 470)
+OfferSpawnerGuiFrame.Position = UDim2.new(0.5, -(offerSpawnerWidth / 2), 0.5, -235)
+OfferSpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(9, 14, 31)
 OfferSpawnerGuiFrame.BorderSizePixel = 0
 OfferSpawnerGuiFrame.Active = true
 OfferSpawnerGuiFrame.Draggable = true
 OfferSpawnerGuiFrame.Visible = false
 OfferSpawnerGuiFrame.Parent = SakaUI
-Instance.new("UICorner", OfferSpawnerGuiFrame).CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", OfferSpawnerGuiFrame).CornerRadius = UDim.new(0, 10)
 
 local OfferPopupStroke = Instance.new("UIStroke")
-OfferPopupStroke.Color = Color3.fromRGB(220, 120, 255)
-OfferPopupStroke.Thickness = 2
+OfferPopupStroke.Color = Color3.fromRGB(83, 220, 255)
+OfferPopupStroke.Thickness = 1
 OfferPopupStroke.Transparency = 0.15
 OfferPopupStroke.Parent = OfferSpawnerGuiFrame
 
@@ -2642,7 +2844,7 @@ OfferPopupTitle.Size = UDim2.new(1, -40, 0, 35)
 OfferPopupTitle.Position = UDim2.new(0, 15, 0, 5)
 OfferPopupTitle.BackgroundTransparency = 1
 OfferPopupTitle.Text = "Offer Spawner"
-OfferPopupTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+OfferPopupTitle.TextColor3 = Color3.fromRGB(210, 245, 255)
 OfferPopupTitle.Font = Enum.Font.GothamBold
 OfferPopupTitle.TextSize = 18
 OfferPopupTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -2653,7 +2855,7 @@ OfferPopupCloseBtn.Size = UDim2.new(0, 28, 0, 28)
 OfferPopupCloseBtn.Position = UDim2.new(1, -38, 0, 6)
 OfferPopupCloseBtn.BackgroundTransparency = 1
 OfferPopupCloseBtn.Text = "X"
-OfferPopupCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+OfferPopupCloseBtn.TextColor3 = Color3.fromRGB(255, 128, 207)
 OfferPopupCloseBtn.Font = Enum.Font.GothamBold
 OfferPopupCloseBtn.TextSize = 18
 OfferPopupCloseBtn.Parent = OfferSpawnerGuiFrame
@@ -2664,12 +2866,12 @@ end)
 local OfferSearchBox = Instance.new("TextBox")
 OfferSearchBox.Size = UDim2.new(1, -16, 0, 30)
 OfferSearchBox.Position = UDim2.new(0, 8, 0, 42)
-OfferSearchBox.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+OfferSearchBox.BackgroundColor3 = Color3.fromRGB(13, 22, 46)
 OfferSearchBox.BorderSizePixel = 0
 OfferSearchBox.PlaceholderText = "Search offer items..."
-OfferSearchBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+OfferSearchBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
 OfferSearchBox.Text = ""
-OfferSearchBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+OfferSearchBox.TextColor3 = Color3.fromRGB(220, 240, 255)
 OfferSearchBox.Font = Enum.Font.Gotham
 OfferSearchBox.TextSize = 13
 OfferSearchBox.ClearTextOnFocus = false
@@ -2683,7 +2885,7 @@ OfferWeaponScrollFrame.BackgroundTransparency = 1
 OfferWeaponScrollFrame.BorderSizePixel = 0
 OfferWeaponScrollFrame.ScrollBarThickness = 4
 OfferWeaponScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-OfferWeaponScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+OfferWeaponScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(83, 220, 255)
 OfferWeaponScrollFrame.Parent = OfferSpawnerGuiFrame
 
 local OfferWeaponGrid = Instance.new("UIGridLayout")
@@ -2736,19 +2938,19 @@ do
 
     RealisticSpawnerGuiFrame = Instance.new("Frame")
     RealisticSpawnerGuiFrame.Name = "RealisticSpawnerGUI"
-    RealisticSpawnerGuiFrame.Size = UDim2.new(0, spawnerWidth, 0, 540)
-    RealisticSpawnerGuiFrame.Position = UDim2.new(0.5, -(spawnerWidth / 2), 0.5, -270)
-    RealisticSpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+    RealisticSpawnerGuiFrame.Size = UDim2.new(0, spawnerWidth, 0, 500)
+    RealisticSpawnerGuiFrame.Position = UDim2.new(0.5, -(spawnerWidth / 2), 0.5, -250)
+    RealisticSpawnerGuiFrame.BackgroundColor3 = Color3.fromRGB(9, 14, 31)
     RealisticSpawnerGuiFrame.BorderSizePixel = 0
     RealisticSpawnerGuiFrame.Active = true
     RealisticSpawnerGuiFrame.Draggable = true
     RealisticSpawnerGuiFrame.Visible = false
     RealisticSpawnerGuiFrame.Parent = SakaUI
-    Instance.new("UICorner", RealisticSpawnerGuiFrame).CornerRadius = UDim.new(0, 16)
+    Instance.new("UICorner", RealisticSpawnerGuiFrame).CornerRadius = UDim.new(0, 10)
 
     local realisticStroke = Instance.new("UIStroke")
-    realisticStroke.Color = Color3.fromRGB(220, 120, 255)
-    realisticStroke.Thickness = 2
+    realisticStroke.Color = Color3.fromRGB(83, 220, 255)
+    realisticStroke.Thickness = 1
     realisticStroke.Transparency = 0.15
     realisticStroke.Parent = RealisticSpawnerGuiFrame
 
@@ -2757,7 +2959,7 @@ do
     realisticTitle.Position = UDim2.new(0, 15, 0, 5)
     realisticTitle.BackgroundTransparency = 1
     realisticTitle.Text = "Realistic Spawner"
-    realisticTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+    realisticTitle.TextColor3 = Color3.fromRGB(210, 245, 255)
     realisticTitle.Font = Enum.Font.GothamBold
     realisticTitle.TextSize = 18
     realisticTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -2768,7 +2970,7 @@ do
     realisticCloseBtn.Position = UDim2.new(1, -38, 0, 6)
     realisticCloseBtn.BackgroundTransparency = 1
     realisticCloseBtn.Text = "X"
-    realisticCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+    realisticCloseBtn.TextColor3 = Color3.fromRGB(255, 128, 207)
     realisticCloseBtn.Font = Enum.Font.GothamBold
     realisticCloseBtn.TextSize = 18
     realisticCloseBtn.Parent = RealisticSpawnerGuiFrame
@@ -2779,12 +2981,12 @@ do
     local realisticSearchBox = Instance.new("TextBox")
     realisticSearchBox.Size = UDim2.new(1, -16, 0, 30)
     realisticSearchBox.Position = UDim2.new(0, 8, 0, 42)
-    realisticSearchBox.BackgroundColor3 = Color3.fromRGB(60, 25, 110)
+    realisticSearchBox.BackgroundColor3 = Color3.fromRGB(13, 22, 46)
     realisticSearchBox.BorderSizePixel = 0
     realisticSearchBox.PlaceholderText = "Search weapons..."
-    realisticSearchBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    realisticSearchBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
     realisticSearchBox.Text = ""
-    realisticSearchBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    realisticSearchBox.TextColor3 = Color3.fromRGB(220, 240, 255)
     realisticSearchBox.Font = Enum.Font.Gotham
     realisticSearchBox.TextSize = 13
     realisticSearchBox.ClearTextOnFocus = false
@@ -2798,7 +3000,7 @@ do
     realisticScrollFrame.BorderSizePixel = 0
     realisticScrollFrame.ScrollBarThickness = 4
     realisticScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-    realisticScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+    realisticScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(83, 220, 255)
     realisticScrollFrame.Parent = RealisticSpawnerGuiFrame
 
     local realisticGrid = Instance.new("UIGridLayout")
@@ -2816,7 +3018,7 @@ do
     local controlsFrame = Instance.new("Frame")
     controlsFrame.Size = UDim2.new(1, -16, 0, 68)
     controlsFrame.Position = UDim2.new(0, 8, 1, -76)
-    controlsFrame.BackgroundColor3 = Color3.fromRGB(55, 22, 95)
+    controlsFrame.BackgroundColor3 = Color3.fromRGB(12, 21, 45)
     controlsFrame.BorderSizePixel = 0
     controlsFrame.Parent = RealisticSpawnerGuiFrame
     Instance.new("UICorner", controlsFrame).CornerRadius = UDim.new(0, 10)
@@ -2824,12 +3026,12 @@ do
     local minBox = Instance.new("TextBox")
     minBox.Size = UDim2.new(0.5, -12, 0, 28)
     minBox.Position = UDim2.new(0, 8, 0, 7)
-    minBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    minBox.BackgroundColor3 = Color3.fromRGB(15, 25, 52)
     minBox.BorderSizePixel = 0
     minBox.PlaceholderText = "Minimum"
-    minBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    minBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
     minBox.Text = "1"
-    minBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    minBox.TextColor3 = Color3.fromRGB(220, 240, 255)
     minBox.Font = Enum.Font.Gotham
     minBox.TextSize = 13
     minBox.ClearTextOnFocus = false
@@ -2839,12 +3041,12 @@ do
     local maxBox = Instance.new("TextBox")
     maxBox.Size = UDim2.new(0.5, -12, 0, 28)
     maxBox.Position = UDim2.new(0.5, 4, 0, 7)
-    maxBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    maxBox.BackgroundColor3 = Color3.fromRGB(15, 25, 52)
     maxBox.BorderSizePixel = 0
     maxBox.PlaceholderText = "Maximum"
-    maxBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    maxBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
     maxBox.Text = "10"
-    maxBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    maxBox.TextColor3 = Color3.fromRGB(220, 240, 255)
     maxBox.Font = Enum.Font.Gotham
     maxBox.TextSize = 13
     maxBox.ClearTextOnFocus = false
@@ -2940,7 +3142,7 @@ do
         nameLabel.Position = UDim2.new(0, 2, 0, 94)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = weaponName or itemId
-        nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+        nameLabel.TextColor3 = Color3.fromRGB(210, 245, 255)
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.TextSize = 12
         nameLabel.TextWrapped = false
@@ -3109,7 +3311,7 @@ local function AddWeaponBox(itemId, itemType, weaponName, rarity)
     nameLabel.Position = UDim2.new(0, 2, 0, 94)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = weaponName or itemId
-    nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+    nameLabel.TextColor3 = Color3.fromRGB(210, 245, 255)
     nameLabel.Font = Enum.Font.GothamBold
     nameLabel.TextSize = 12
     nameLabel.TextWrapped = false
@@ -3180,7 +3382,7 @@ local function AddOfferWeaponBox(itemId, itemType, weaponName, rarity)
     nameLabel.Position = UDim2.new(0, 2, 0, 94)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = weaponName or itemId
-    nameLabel.TextColor3 = Color3.fromRGB(255, 235, 255)
+    nameLabel.TextColor3 = Color3.fromRGB(210, 245, 255)
     nameLabel.Font = Enum.Font.GothamBold
     nameLabel.TextSize = 12
     nameLabel.TextWrapped = false
@@ -3419,10 +3621,10 @@ CartiHubSelectedUpgradePlayerName = nil
 CartiHubUpgradePlayerDropdownBtn = CreateBtn(UpgradingFrame, "SELECT PLAYER: NONE")
 CartiHubUpgradePlayerListFrame = Instance.new("ScrollingFrame")
 CartiHubUpgradePlayerListFrame.Size = UDim2.new(1, 0, 0, 180)
-CartiHubUpgradePlayerListFrame.BackgroundColor3 = Color3.fromRGB(55, 22, 95)
+CartiHubUpgradePlayerListFrame.BackgroundColor3 = Color3.fromRGB(12, 21, 45)
 CartiHubUpgradePlayerListFrame.BorderSizePixel = 0
 CartiHubUpgradePlayerListFrame.ScrollBarThickness = 4
-CartiHubUpgradePlayerListFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+CartiHubUpgradePlayerListFrame.ScrollBarImageColor3 = Color3.fromRGB(83, 220, 255)
 CartiHubUpgradePlayerListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 CartiHubUpgradePlayerListFrame.ClipsDescendants = true
 CartiHubUpgradePlayerListFrame.Parent = UpgradingFrame
@@ -3450,7 +3652,7 @@ CartiHubUpgradePlayerListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):
 end)
 
 CartiHubLaunchUpgradeTradeBtn = CreateBtn(UpgradingFrame, "LAUNCH FAKE TRADE")
-CartiHubFakePersonTradeBtn = CreateBtn(UpgradingFrame, "FAKE TRADE FAKE PERSON")
+CartiHubFakePersonTradeBtn = CreateBtn(UpgradingFrame, "FAKE UPGRADE FAKE PLAYER")
 CartiHubPlayerValuesBtn = CreateBtn(UpgradingFrame, "PLAYERS VALUES")
 CartiHubBlockValueBtn = CreateBtn(UpgradingFrame, "BLOCK VALUE")
 
@@ -3575,10 +3777,6 @@ local function CartiHubDirectBlockRobloxUser(requestFunction, username)
 
         csrfToken = CartiHubGetResponseHeader(csrfResponse, "x-csrf-token")
         _G.CartiHubBlockCsrfToken = csrfToken
-        print(("[Carti Hub] Block CSRF preflight: status=%d token=%s"):format(
-            CartiHubGetResponseStatus(csrfResponse),
-            csrfToken and "received" or "missing"
-        ))
     end
 
     if not csrfToken or csrfToken == "" then
@@ -3600,10 +3798,6 @@ local function CartiHubDirectBlockRobloxUser(requestFunction, username)
     })
 
     local statusCode = CartiHubGetResponseStatus(blockResponse)
-    print(("[Carti Hub] Block result: status=%d body=%s"):format(
-        statusCode,
-        string.sub(CartiHubGetResponseBody(blockResponse), 1, 300)
-    ))
     local normalizedBlockBody = string.gsub(CartiHubGetResponseBody(blockResponse), "%s+", "")
     -- Roblox returns numeric code 1 when this request is a no-op for an already
     -- blocked account. Verify the authoritative blocked-user list in both cases.
@@ -3622,10 +3816,6 @@ local function CartiHubDirectBlockRobloxUser(requestFunction, username)
 
         local verifyStatus = CartiHubGetResponseStatus(verifyResponse)
         local verifyBody = CartiHubGetResponseBody(verifyResponse)
-        print(("[Carti Hub] Block verification: status=%d body=%s"):format(
-            verifyStatus,
-            string.sub(verifyBody, 1, 300)
-        ))
 
         if verifyStatus < 200 or verifyStatus >= 300 then
             return false, "BLOCK VERIFY FAILED"
@@ -3909,7 +4099,6 @@ function CartiHubDeclinePalHairFriendRequests(runGeneration)
                             if declineAllStatus >= 200 and declineAllStatus < 300 then
                                 table.clear(pendingUsers)
                                 table.clear(_G.CartiHubPalHairCheckedAt)
-                                print("[Carti Hub] Declined all friend requests after Pal Hair bot surge.")
                                 return true, recentCount
                             elseif declineAllStatus == 429 then
                                 local retryAfter = tonumber(CartiHubGetResponseHeader(declineAllResponse, "retry-after")) or 15
@@ -3962,7 +4151,6 @@ function CartiHubDeclinePalHairFriendRequests(runGeneration)
                             declinedCount += 1
                             _G.CartiHubPalHairCheckedAt[requesterId] = os.clock()
                             _G.CartiHubPalHairPendingUsers[requesterId] = nil
-                            print("[Carti Hub] Declined Pal Hair friend request from user " .. requesterId)
                             task.wait(2)
                         elseif declineStatus == 403 then
                             csrfToken = ""
@@ -4086,7 +4274,6 @@ function CartiHubBlockUsersFromFriendRequests()
 
                         if blocked then
                             blockedCount += 1
-                            print("[Carti Hub] Blocked requested user " .. tostring(username))
                         else
                             warn("[Carti Hub] Could not block " .. tostring(username) .. ": " .. tostring(errorText))
                         end
@@ -4138,10 +4325,10 @@ function CartiHubRefreshUpgradePlayerDropdown()
             playerButton.Size = UDim2.new(1, 0, 0, 30)
             playerButton.BackgroundColor3 = player.Name == CartiHubSelectedUpgradePlayerName
                 and BUTTON_HOVER_COLOR
-                or Color3.fromRGB(70, 30, 120)
+                or Color3.fromRGB(15, 25, 52)
             playerButton.BorderSizePixel = 0
             playerButton.Text = player.Name
-            playerButton.TextColor3 = Color3.fromRGB(255, 245, 255)
+            playerButton.TextColor3 = Color3.fromRGB(220, 240, 255)
             playerButton.Font = Enum.Font.GothamBold
             playerButton.TextSize = 13
             playerButton.Parent = CartiHubUpgradePlayerListFrame
@@ -4168,8 +4355,8 @@ end
 
 CartiHubUpgradePlayerDropdownBtn.MouseButton1Click:Connect(CartiHubRefreshUpgradePlayerDropdown)
 
-CartiHubAutoSelectLastTradedEnabled = false
-CartiHubAutoSelectLastTradedBtn = CreateBtn(UpgradingFrame, "AUTO SELECT LAST TRADED: OFF")
+CartiHubAutoSelectLastTradedEnabled = true
+CartiHubAutoSelectLastTradedBtn = CreateBtn(UpgradingFrame, "AUTO SELECT LAST TRADED: ON")
 
 function CartiHubSetAutoSelectLastTraded(enabled)
     CartiHubAutoSelectLastTradedEnabled = enabled == true
@@ -4204,6 +4391,8 @@ CartiHubAutoSelectLastTradedBtn.MouseButton1Click:Connect(function()
     CartiHubSetAutoSelectLastTraded(not CartiHubAutoSelectLastTradedEnabled)
 end)
 
+CartiHubSetAutoSelectLastTraded(true)
+
 CartiHubLaunchUpgradeTradeBtn.MouseButton1Click:Connect(function()
     if not CartiHubSelectedUpgradePlayerName then
         CartiHubLaunchUpgradeTradeBtn.Text = "SELECT A PLAYER FIRST"
@@ -4221,13 +4410,13 @@ CartiHubLaunchUpgradeTradeBtn.MouseButton1Click:Connect(function()
 end)
 
 CartiHubFakePersonTradeBtn.MouseButton1Click:Connect(function()
-    if CartiHubLaunchInstantFakePersonTrade then
-        CartiHubLaunchInstantFakePersonTrade()
+    if CartiHubLaunchFakeUpgradeFakePlayer then
+        CartiHubLaunchFakeUpgradeFakePlayer()
     else
         CartiHubFakePersonTradeBtn.Text = "TRADE UI NOT READY"
         task.delay(2, function()
             if CartiHubFakePersonTradeBtn.Parent then
-                CartiHubFakePersonTradeBtn.Text = "FAKE TRADE FAKE PERSON"
+                CartiHubFakePersonTradeBtn.Text = "FAKE UPGRADE FAKE PLAYER"
             end
         end)
     end
@@ -4400,7 +4589,7 @@ local AvatarChangerFrame = Instance.new("Frame")
 AvatarChangerFrame.Name = "AvatarChangerGUI"
 AvatarChangerFrame.Size = UDim2.new(0, 280, 0, 190)
 AvatarChangerFrame.Position = UDim2.new(0.5, -140, 0.5, -95)
-AvatarChangerFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+AvatarChangerFrame.BackgroundColor3 = Color3.fromRGB(9, 14, 31)
 AvatarChangerFrame.BorderSizePixel = 0
 AvatarChangerFrame.Active = true
 AvatarChangerFrame.Draggable = true
@@ -4409,7 +4598,7 @@ AvatarChangerFrame.Parent = SakaUI
 Instance.new("UICorner", AvatarChangerFrame).CornerRadius = UDim.new(0, 14)
 
 local AvatarChangerStroke = Instance.new("UIStroke")
-AvatarChangerStroke.Color = Color3.fromRGB(220, 120, 255)
+AvatarChangerStroke.Color = Color3.fromRGB(83, 220, 255)
 AvatarChangerStroke.Thickness = 2
 AvatarChangerStroke.Transparency = 0.15
 AvatarChangerStroke.Parent = AvatarChangerFrame
@@ -4419,7 +4608,7 @@ AvatarChangerTitle.Size = UDim2.new(1, -44, 0, 36)
 AvatarChangerTitle.Position = UDim2.new(0, 14, 0, 6)
 AvatarChangerTitle.BackgroundTransparency = 1
 AvatarChangerTitle.Text = "Avatar Changer"
-AvatarChangerTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+AvatarChangerTitle.TextColor3 = Color3.fromRGB(210, 245, 255)
 AvatarChangerTitle.Font = Enum.Font.GothamBold
 AvatarChangerTitle.TextSize = 17
 AvatarChangerTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -4430,7 +4619,7 @@ AvatarChangerCloseBtn.Size = UDim2.new(0, 30, 0, 30)
 AvatarChangerCloseBtn.Position = UDim2.new(1, -38, 0, 7)
 AvatarChangerCloseBtn.BackgroundTransparency = 1
 AvatarChangerCloseBtn.Text = "X"
-AvatarChangerCloseBtn.TextColor3 = Color3.fromRGB(255, 210, 255)
+AvatarChangerCloseBtn.TextColor3 = Color3.fromRGB(255, 128, 207)
 AvatarChangerCloseBtn.Font = Enum.Font.GothamBold
 AvatarChangerCloseBtn.TextSize = 18
 AvatarChangerCloseBtn.Parent = AvatarChangerFrame
@@ -4438,11 +4627,11 @@ AvatarChangerCloseBtn.Parent = AvatarChangerFrame
 local AvatarUserIdBox = Instance.new("TextBox")
 AvatarUserIdBox.Size = UDim2.new(1, -28, 0, 38)
 AvatarUserIdBox.Position = UDim2.new(0, 14, 0, 52)
-AvatarUserIdBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+AvatarUserIdBox.BackgroundColor3 = Color3.fromRGB(15, 25, 52)
 AvatarUserIdBox.PlaceholderText = "Username or User ID"
-AvatarUserIdBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+AvatarUserIdBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
 AvatarUserIdBox.Text = ""
-AvatarUserIdBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+AvatarUserIdBox.TextColor3 = Color3.fromRGB(220, 240, 255)
 AvatarUserIdBox.Font = Enum.Font.Gotham
 AvatarUserIdBox.TextSize = 14
 AvatarUserIdBox.ClearTextOnFocus = false
@@ -5981,7 +6170,7 @@ local function toggleLocalOffer(itemId, itemType)
             offer.Amount = (tonumber(offer.Amount) or 1) + 1
             applyInventoryDelta(itemId, itemType, -1)
             redrawLocalTrade()
-            startAcceptCooldown(5)
+            startAcceptCooldown(6)
             return
         end
     end
@@ -5999,7 +6188,7 @@ local function toggleLocalOffer(itemId, itemType)
 
     applyInventoryDelta(itemId, itemType, -1)
     redrawLocalTrade()
-    startAcceptCooldown(5)
+    startAcceptCooldown(6)
 end
 
 function CartiHubGetFakeTradeSearchBox()
@@ -6177,11 +6366,30 @@ end
 
 local function addItemToTheirOfferStack(itemId, itemType, amount, hideSeasonalTags)
     amount = tonumber(amount) or 1
+    local sourceData = sync[itemType] and sync[itemType][itemId]
+    local displayName = sourceData and (sourceData.ItemName or sourceData.Name) or itemId
+    local rarity = sourceData and sourceData.Rarity or ""
+    local stackKey = table.concat({
+        tostring(itemType),
+        tostring(rarity),
+        normalizeItemText(displayName),
+    }, ":")
 
     for _, offer in ipairs(theirOffer) do
-        if offer.ItemID == itemId and offer.ItemType == itemType then
+        local offerData = sync[offer.ItemType] and sync[offer.ItemType][offer.ItemID]
+        local offerName = offerData and (offerData.ItemName or offerData.Name) or offer.ItemID
+        local offerRarity = offerData and offerData.Rarity or ""
+        local offerStackKey = offer.StackKey or table.concat({
+            tostring(offer.ItemType),
+            tostring(offerRarity),
+            normalizeItemText(offerName),
+        }, ":")
+
+        if (offer.ItemID == itemId and offer.ItemType == itemType)
+            or offerStackKey == stackKey then
             offer.Amount = (tonumber(offer.Amount) or 1) + amount
             offer.HideSeasonalTags = offer.HideSeasonalTags or hideSeasonalTags == true
+            offer.StackKey = stackKey
             return true
         end
     end
@@ -6194,6 +6402,7 @@ local function addItemToTheirOfferStack(itemId, itemType, amount, hideSeasonalTa
         ItemID = itemId,
         Amount = amount,
         ItemType = itemType,
+        StackKey = stackKey,
         HideSeasonalTags = hideSeasonalTags == true,
     })
 
@@ -6221,12 +6430,8 @@ local function addRandomGodlyToTheirOffer()
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
     CartiHubApplyPendingFakeTradeUsername()
-    startAcceptCooldown(5)
+    startAcceptCooldown(6)
 
-    print(("[IncomingTradePopup] Added random godly to their offer: %s/%s"):format(
-        tostring(item.ItemType),
-        tostring(item.ItemID)
-    ))
 end
 
 local function getStoredWeaponValue(itemId, data)
@@ -6304,9 +6509,8 @@ addSpecificItemToTheirOffer = function(itemId, itemType, hideSeasonalTags)
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
     CartiHubApplyPendingFakeTradeUsername()
-    startAcceptCooldown(5)
+    startAcceptCooldown(6)
 
-    print(("[IncomingTradePopup] Added offer-spawner item: %s/%s"):format(tostring(itemType), tostring(itemId)))
 end
 
 removeLastTheirOffer = function()
@@ -6325,12 +6529,8 @@ removeLastTheirOffer = function()
     resetAcceptUi()
     tradeModule.GUI.TheirOffer.Username.Text = "(" .. getFakeTradeSenderName() .. ")"
     CartiHubApplyPendingFakeTradeUsername()
-    startAcceptCooldown(5)
+    startAcceptCooldown(6)
 
-    print(("[IncomingTradePopup] Removed their last offered item: %s/%s"):format(
-        tostring(removed.ItemType),
-        tostring(removed.ItemID)
-    ))
 end
 
 local function addOverlayClickTarget(parent, itemId, itemType)
@@ -6489,8 +6689,10 @@ local function openTradeFrameFromAccept()
     local tradeGui = tradeModule.GUI.TradeGUI
     local tradeContainer = tradeGui.Container
     local shouldAutoSearch = _G.CartiHubAutoTradeSearchPending == true
+    local shouldAutoUpgradeOffer = _G.CartiHubAutoUpgradeOfferPending == true
 
     _G.CartiHubAutoTradeSearchPending = nil
+    _G.CartiHubAutoUpgradeOfferPending = nil
 
     _G.CartiHubFakeTradeActive = true
     CartiHubStartFakeTradeFrameGuard()
@@ -6535,11 +6737,27 @@ local function openTradeFrameFromAccept()
     if shouldAutoSearch then
         CartiHubStartAutoTradeOfferFill()
     end
+
+    if shouldAutoUpgradeOffer then
+        task.spawn(function()
+            task.wait(math.random(50, 200) / 100)
+
+            local count = math.random(1, 3)
+            for _ = 1, count do
+                if not _G.CartiHubFakeTradeActive or not tradeGui.Enabled then
+                    return
+                end
+
+                addRandomWeaponAboveValue(1000)
+                task.wait(math.random(50, 200) / 100)
+            end
+        end)
+    end
 end
 
 cleanupOldOverlays()
 
-function CartiHubLaunchInstantFakePersonTrade(username, isReturnTrade, autoSearch)
+function CartiHubLaunchInstantFakePersonTrade(username, isReturnTrade, autoSearch, autoUpgradeOffer)
     if _G.CartiHubFakeTradeActive then
         return false
     end
@@ -6547,12 +6765,17 @@ function CartiHubLaunchInstantFakePersonTrade(username, isReturnTrade, autoSearc
     username = CartiHubNormalizeTradeUsername(username) or pickFakeTradeSenderName()
     currentFakeTradeSenderName = username
     _G.CartiHubAutoTradeSearchPending = autoSearch == true
+    _G.CartiHubAutoUpgradeOfferPending = autoUpgradeOffer == true
     _G.CartiHubPendingFakeTradeUsername = username
     _G.CartiHubActiveFakeTradeUsername = username
     _G.CartiHubInstantFakeTradeReturnPending = isReturnTrade ~= true
 
     task.defer(openTradeFrameFromAccept)
     return true
+end
+
+function CartiHubLaunchFakeUpgradeFakePlayer()
+    return CartiHubLaunchInstantFakePersonTrade(nil, false, false, true)
 end
 
 function CartiHubLaunchUpgradeFakeTrade(username)
@@ -6577,15 +6800,26 @@ local function SwitchTab(activeBtn, activeFrame)
     SettingsFrame.Visible = false
     KeybindsFrame.Visible = false
 
-    SpawnerTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-    TradeTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-    UpgradingTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-    BlockTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-    SettingsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
-    KeybindsTabBtn.BackgroundColor3 = Color3.fromRGB(140, 60, 200)
+    for _, tab in ipairs({ SpawnerTabBtn, TradeTabBtn, UpgradingTabBtn, BlockTabBtn, SettingsTabBtn, KeybindsTabBtn }) do
+        tab.BackgroundColor3 = Color3.fromRGB(19, 7, 33)
+        tab.BackgroundTransparency = 1
+        tab.TextColor3 = Color3.fromRGB(182, 160, 203)
+
+        local accent = tab:FindFirstChild("NebulaActiveAccent")
+        if accent then
+            accent.Visible = false
+        end
+    end
 
     activeFrame.Visible = true
     activeBtn.BackgroundColor3 = BUTTON_HOVER_COLOR
+    activeBtn.BackgroundTransparency = 0.35
+    activeBtn.TextColor3 = Color3.fromRGB(255, 244, 255)
+
+    local activeAccent = activeBtn:FindFirstChild("NebulaActiveAccent")
+    if activeAccent then
+        activeAccent.Visible = true
+    end
 end
 
 SpawnerTabBtn.MouseButton1Click:Connect(function()
@@ -6625,6 +6859,11 @@ _G.ClientPlaceholderTradeKeybindConnection = UserInputService.InputBegan:Connect
     if input.KeyCode == Enum.KeyCode.Six then
         if SakaUI and SakaUI.Parent then
             SakaUI.Enabled = not SakaUI.Enabled
+
+            local nebulaGui = _G.CartiHubNebulaGui
+            if nebulaGui and nebulaGui.Parent then
+                nebulaGui.Enabled = SakaUI.Enabled
+            end
         end
         return
     end
@@ -7156,18 +7395,18 @@ task.spawn(function()
     gui.Parent = parent
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 350, 0, 480)
-    frame.Position = UDim2.new(0.5, -175, 0.5, -240)
-    frame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+    frame.Size = UDim2.new(0, 300, 0, 450)
+    frame.Position = UDim2.new(0.5, -150, 0.5, -225)
+    frame.BackgroundColor3 = Color3.fromRGB(9, 14, 31)
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Draggable = true
     frame.Parent = gui
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(220, 120, 255)
-    stroke.Thickness = 2
+    stroke.Color = Color3.fromRGB(83, 220, 255)
+    stroke.Thickness = 1
     stroke.Transparency = 0.15
     stroke.Parent = frame
 
@@ -7176,7 +7415,7 @@ task.spawn(function()
     title.Position = UDim2.new(0, 14, 0, 4)
     title.BackgroundTransparency = 1
     title.Text = "Players Values"
-    title.TextColor3 = Color3.fromRGB(255, 235, 255)
+    title.TextColor3 = Color3.fromRGB(210, 245, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 18
     title.TextXAlignment = Enum.TextXAlignment.Left
@@ -7199,7 +7438,7 @@ task.spawn(function()
     closeButton.Position = UDim2.new(1, -36, 0, 10)
     closeButton.BackgroundTransparency = 1
     closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.fromRGB(255, 210, 255)
+    closeButton.TextColor3 = Color3.fromRGB(255, 128, 207)
     closeButton.Font = Enum.Font.GothamBold
     closeButton.TextSize = 18
     closeButton.Parent = frame
@@ -7210,7 +7449,7 @@ task.spawn(function()
     scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel = 0
     scroll.ScrollBarThickness = 4
-    scroll.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 255)
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(83, 220, 255)
     scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
     scroll.Parent = frame
 
@@ -7258,18 +7497,18 @@ task.spawn(function()
             local entries = row.Entries
             local card = Instance.new("Frame")
             card.Size = UDim2.new(1, -4, 0, 88)
-            card.BackgroundColor3 = Color3.fromRGB(65, 27, 108)
+            card.BackgroundColor3 = Color3.fromRGB(16, 27, 55)
             card.BorderSizePixel = 0
             card.LayoutOrder = index
             card.Parent = scroll
-            Instance.new("UICorner", card).CornerRadius = UDim.new(0, 8)
+            Instance.new("UICorner", card).CornerRadius = UDim.new(0, 6)
 
             local name = Instance.new("TextLabel")
             name.Size = UDim2.new(1, -20, 0, 22)
             name.Position = UDim2.new(0, 10, 0, 5)
             name.BackgroundTransparency = 1
             name.Text = player.Name
-            name.TextColor3 = Color3.fromRGB(255, 245, 255)
+            name.TextColor3 = Color3.fromRGB(220, 240, 255)
             name.Font = Enum.Font.GothamBold
             name.TextSize = 14
             name.TextXAlignment = Enum.TextXAlignment.Left
@@ -7310,6 +7549,29 @@ task.spawn(function()
         gui.Enabled = false
     end)
     refreshButton.MouseButton1Click:Connect(refreshValues)
+
+    local refreshQueued = false
+    local function queuePlayerValuesRefresh(delaySeconds)
+        if refreshQueued or not gui.Enabled then
+            return
+        end
+
+        refreshQueued = true
+        task.delay(delaySeconds or 0, function()
+            refreshQueued = false
+            if gui.Parent and gui.Enabled then
+                refreshValues()
+            end
+        end)
+    end
+
+    Players.PlayerAdded:Connect(function()
+        queuePlayerValuesRefresh(0.5)
+    end)
+
+    Players.PlayerRemoving:Connect(function()
+        queuePlayerValuesRefresh()
+    end)
 
     _G.CartiHubNormalItemValues = NORMAL_ITEM_VALUES
     _G.CartiHubChromaItemValues = CHROMA_ITEM_VALUES
@@ -7353,7 +7615,7 @@ task.spawn(function()
     local blockValueFrame = Instance.new("Frame")
     blockValueFrame.Size = UDim2.new(0, 280, 0, 164)
     blockValueFrame.Position = UDim2.new(0.5, -140, 0.5, -82)
-    blockValueFrame.BackgroundColor3 = Color3.fromRGB(45, 15, 85)
+    blockValueFrame.BackgroundColor3 = Color3.fromRGB(9, 14, 31)
     blockValueFrame.BorderSizePixel = 0
     blockValueFrame.Active = true
     blockValueFrame.Draggable = true
@@ -7361,7 +7623,7 @@ task.spawn(function()
     Instance.new("UICorner", blockValueFrame).CornerRadius = UDim.new(0, 12)
 
     local blockValueStroke = Instance.new("UIStroke")
-    blockValueStroke.Color = Color3.fromRGB(220, 120, 255)
+    blockValueStroke.Color = Color3.fromRGB(83, 220, 255)
     blockValueStroke.Thickness = 2
     blockValueStroke.Transparency = 0.15
     blockValueStroke.Parent = blockValueFrame
@@ -7371,7 +7633,7 @@ task.spawn(function()
     blockValueTitle.Position = UDim2.new(0, 12, 0, 4)
     blockValueTitle.BackgroundTransparency = 1
     blockValueTitle.Text = "Block Value"
-    blockValueTitle.TextColor3 = Color3.fromRGB(255, 235, 255)
+    blockValueTitle.TextColor3 = Color3.fromRGB(210, 245, 255)
     blockValueTitle.Font = Enum.Font.GothamBold
     blockValueTitle.TextSize = 17
     blockValueTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -7382,7 +7644,7 @@ task.spawn(function()
     blockValueClose.Position = UDim2.new(1, -36, 0, 8)
     blockValueClose.BackgroundTransparency = 1
     blockValueClose.Text = "X"
-    blockValueClose.TextColor3 = Color3.fromRGB(255, 210, 255)
+    blockValueClose.TextColor3 = Color3.fromRGB(255, 128, 207)
     blockValueClose.Font = Enum.Font.GothamBold
     blockValueClose.TextSize = 18
     blockValueClose.Parent = blockValueFrame
@@ -7390,12 +7652,12 @@ task.spawn(function()
     local minimumBox = Instance.new("TextBox")
     minimumBox.Size = UDim2.new(1, -24, 0, 36)
     minimumBox.Position = UDim2.new(0, 12, 0, 45)
-    minimumBox.BackgroundColor3 = Color3.fromRGB(70, 30, 120)
+    minimumBox.BackgroundColor3 = Color3.fromRGB(15, 25, 52)
     minimumBox.BorderSizePixel = 0
     minimumBox.PlaceholderText = "Minimum value"
-    minimumBox.PlaceholderColor3 = Color3.fromRGB(200, 170, 230)
+    minimumBox.PlaceholderColor3 = Color3.fromRGB(120, 151, 191)
     minimumBox.Text = ""
-    minimumBox.TextColor3 = Color3.fromRGB(255, 245, 255)
+    minimumBox.TextColor3 = Color3.fromRGB(220, 240, 255)
     minimumBox.Font = Enum.Font.Gotham
     minimumBox.TextSize = 14
     minimumBox.ClearTextOnFocus = false
@@ -7656,5 +7918,240 @@ task.spawn(function()
     end
 end)
 
-print("[Carti Hub] Loaded.")
-print("[Carti Hub] Spawner GUI shows Godly and Ancient weapons only, 5 per row, with rarity colors.")
+task.spawn(function()
+    local assetId = "rbxassetid://86422603476263"
+    local loadedOk, loadedObjects = pcall(function()
+        return game:GetObjects(assetId)
+    end)
+
+    if not loadedOk or type(loadedObjects) ~= "table" or not loadedObjects[1] then
+        warn("[Carti Hub] Nebula UI asset could not be loaded: " .. tostring(loadedObjects))
+        return
+    end
+
+    local nebulaGui = loadedObjects[1]
+    if not nebulaGui:IsA("ScreenGui") then
+        nebulaGui = nebulaGui:FindFirstChildWhichIsA("ScreenGui", true)
+    end
+
+    if not nebulaGui then
+        warn("[Carti Hub] Nebula UI asset did not contain a ScreenGui.")
+        return
+    end
+
+    nebulaGui.Name = "CartiHubNebula"
+    nebulaGui.ResetOnSpawn = false
+    nebulaGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    nebulaGui.Parent = safeParent()
+    _G.CartiHubNebulaGui = nebulaGui
+
+    local uiFolder = nebulaGui:FindFirstChild("UI")
+    local panel = uiFolder and uiFolder:FindFirstChild("Panel")
+    local panelFrame = panel and panel:FindFirstChild("MainFrame")
+    local panelContainer = panelFrame and panelFrame:FindFirstChild("Container")
+    local ribbon = panelFrame and panelFrame:FindFirstChild("Ribbon")
+    local topbar = panelFrame and panelFrame:FindFirstChild("Topbar")
+
+    if not panelFrame or not panelContainer or not ribbon or not topbar then
+        nebulaGui:Destroy()
+        _G.CartiHubNebulaGui = nil
+        warn("[Carti Hub] Nebula UI asset is missing the PC panel layout.")
+        return
+    end
+
+    for _, surfaceName in ipairs({ "Menu", "Command Bar", "Popups" }) do
+        local surface = uiFolder:FindFirstChild(surfaceName)
+        if surface and surface:IsA("GuiObject") then
+            surface.Visible = false
+        end
+    end
+
+    local panelPopups = panel:FindFirstChild("Popups")
+    if panelPopups and panelPopups:IsA("GuiObject") then
+        panelPopups.Visible = false
+    end
+
+    panel.Visible = true
+    panelFrame.Visible = true
+    panel.Size = UDim2.new(0, 360, 0, 535)
+    panel.Position = UDim2.new(0.5, 0, 0.5, 0)
+
+    local sizeConstraint = panel:FindFirstChildOfClass("UISizeConstraint")
+    if sizeConstraint then
+        sizeConstraint.MinSize = Vector2.new(360, 535)
+        sizeConstraint.MaxSize = Vector2.new(360, 535)
+    end
+
+    local aspectConstraint = panel:FindFirstChildOfClass("UIAspectRatioConstraint")
+    if aspectConstraint then
+        aspectConstraint:Destroy()
+    end
+
+    panelFrame.Active = true
+    panelContainer.ClipsDescendants = true
+
+    for _, child in ipairs(panelContainer:GetChildren()) do
+        if child:IsA("GuiObject") then
+            child:Destroy()
+        end
+    end
+
+    for _, ribbonSideName in ipairs({ "Left", "Right" }) do
+        local ribbonSide = ribbon:FindFirstChild(ribbonSideName)
+        if ribbonSide then
+            for _, child in ipairs(ribbonSide:GetChildren()) do
+                if child:IsA("GuiObject") or child:IsA("UIListLayout") or child:IsA("UIPadding") then
+                    child:Destroy()
+                end
+            end
+        end
+    end
+
+    for _, topbarSideName in ipairs({ "Left", "Middle", "Right" }) do
+        local topbarSide = topbar:FindFirstChild(topbarSideName)
+        if topbarSide then
+            for _, child in ipairs(topbarSide:GetChildren()) do
+                if child:IsA("GuiObject") then
+                    child:Destroy()
+                end
+            end
+        end
+    end
+
+    local dragHandle = Instance.new("TextButton")
+    dragHandle.Name = "CartiHubDragHandle"
+    dragHandle.Size = UDim2.fromScale(1, 1)
+    dragHandle.BackgroundTransparency = 1
+    dragHandle.BorderSizePixel = 0
+    dragHandle.Text = ""
+    dragHandle.AutoButtonColor = false
+    dragHandle.Active = true
+    dragHandle.ZIndex = 20
+    dragHandle.Parent = topbar
+
+    local dragging = false
+    local dragStart
+    local panelStart
+
+    local function updatePanelDrag(input)
+        local delta = input.Position - dragStart
+        panel.Position = UDim2.new(
+            panelStart.X.Scale,
+            panelStart.X.Offset + delta.X,
+            panelStart.Y.Scale,
+            panelStart.Y.Offset + delta.Y
+        )
+    end
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        dragging = true
+        dragStart = input.Position
+        panelStart = panel.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            updatePanelDrag(input)
+        end
+    end)
+
+    local topbarLeft = topbar:FindFirstChild("Left")
+    if topbarLeft then
+        local logo = Instance.new("ImageLabel")
+        logo.Name = "CartiHubLogo"
+        logo.Size = UDim2.new(0, 18, 0, 18)
+        logo.Position = UDim2.new(0, 9, 0.5, -9)
+        logo.BackgroundTransparency = 1
+        logo.Image = "rbxassetid://85529926460930"
+        logo.ScaleType = Enum.ScaleType.Fit
+        logo.ZIndex = 22
+        logo.Parent = topbarLeft
+    end
+
+    TabContainer.Parent = ribbon
+    TabContainer.BackgroundTransparency = 1
+    TabContainer.Size = UDim2.new(1, -18, 1, -8)
+    TabContainer.Position = UDim2.new(0, 9, 0, 4)
+    TabContainer.ZIndex = 20
+
+    TabLayout.FillDirection = Enum.FillDirection.Horizontal
+    TabLayout.FillDirectionMaxCells = 6
+    TabLayout.CellSize = UDim2.new(1 / 6, -4, 1, 0)
+    TabLayout.CellPadding = UDim2.new(0, 4, 0, 0)
+
+    for _, tab in ipairs({ SpawnerTabBtn, TradeTabBtn, UpgradingTabBtn, BlockTabBtn, SettingsTabBtn, KeybindsTabBtn }) do
+        tab.Size = UDim2.new(0, 0, 0, 0)
+        tab.BackgroundTransparency = 1
+        tab.TextXAlignment = Enum.TextXAlignment.Center
+        tab.TextColor3 = Color3.fromRGB(192, 181, 208)
+        tab.TextSize = 8
+
+        local padding = tab:FindFirstChildOfClass("UIPadding")
+        if padding then
+            padding:Destroy()
+        end
+
+        local accent = tab:FindFirstChild("NebulaActiveAccent")
+        if accent then
+            accent.Visible = false
+        end
+    end
+
+    for _, page in ipairs({ SpawnerFrame, TradeFrame, UpgradingFrame, BlockFrame, SettingsFrame, KeybindsFrame }) do
+        page.Parent = panelContainer
+        page.Size = UDim2.new(1, -24, 1, -20)
+        page.Position = UDim2.new(0, 12, 0, 10)
+        page.ZIndex = 12
+        page.ScrollBarThickness = 3
+    end
+
+    local middle = topbar:FindFirstChild("Middle")
+    if middle then
+        Title.Parent = middle
+        Title.Size = UDim2.new(1, 0, 1, 0)
+        Title.Position = UDim2.fromScale(0, 0)
+        Title.Text = "t.me/cartiscripts"
+        Title.TextSize = 11
+        Title.TextXAlignment = Enum.TextXAlignment.Center
+        Title.ZIndex = 22
+    end
+
+    local right = topbar:FindFirstChild("Right")
+    if right then
+        CloseBtn.Parent = right
+        CloseBtn.Size = UDim2.new(0, 28, 1, 0)
+        CloseBtn.Position = UDim2.new(1, -30, 0, 0)
+        CloseBtn.TextSize = 14
+        CloseBtn.ZIndex = 22
+    end
+
+    local bottom = panelFrame:FindFirstChild("Bottom")
+    local bottomLeft = bottom and bottom:FindFirstChild("Left")
+    if bottomLeft then
+        for _, label in ipairs(bottomLeft:GetDescendants()) do
+            if label:IsA("TextLabel") then
+                label.Text = label.Text == "" and localPlayer.Name or label.Text
+            end
+        end
+    end
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        if nebulaGui.Parent then
+            nebulaGui:Destroy()
+        end
+    end)
+
+    MainFrame.Visible = false
+end)
